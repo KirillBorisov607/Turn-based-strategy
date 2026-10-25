@@ -26,6 +26,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Capture")
 	static FString DescribeSlate();
 
+	/** Saves the live HUD portrait of a hero or Toony enemy as a PNG; the first call only starts the camera. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Capture", meta = (WorldContext = "WorldContextObject"))
+	static bool ExportPortrait(const UObject* WorldContextObject, FName Hero, bool bEnemy, const FString& FilePath);
+
 	/** The first actor whose name contains Part, in the world of WorldContextObject. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Capture", meta = (WorldContext = "WorldContextObject"))
 	static AActor* FindActorByName(const UObject* WorldContextObject, const FString& Part);

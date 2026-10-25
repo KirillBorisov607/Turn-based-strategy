@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "ImageUtils.h"
+#include "KeepersHeroes.h"
 #include "Misc/FileHelper.h"
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
@@ -135,6 +136,26 @@ FString UKeepersCaptureLibrary::DescribeSlate()
 		Result += TEXT("  under: ") + Path.Widgets[Index].Widget->GetTypeAsString() + Line;
 	}
 	return Result;
+}
+
+bool UKeepersCaptureLibrary::ExportPortrait(const UObject* WorldContextObject, FName Hero, bool bEnemy, const FString& FilePath)
+{
+	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
+	UKeepersHeroLookSubsystem* Looks = World ? World->GetSubsystem<UKeepersHeroLookSubsystem>() : nullptr;
+	UTextureRenderTarget2D* Target = Looks ? Looks->GetPortrait(Hero, bEnemy) : nullptr;
+	FTextureRenderTargetResource* Resource = Target ? Target->GameThread_GetRenderTargetResource() : nullptr;
+	TArray<FColor> Pixels;
+	if (!Resource || !Resource->ReadPixels(Pixels) || Pixels.Num() != Target->SizeX * Target->SizeY)
+	{
+		return false;
+	}
+	for (FColor& Pixel : Pixels)
+	{
+		Pixel.A = 255;
+	}
+	TArray64<uint8> Png;
+	FImageUtils::PNGCompressImageArray(Target->SizeX, Target->SizeY, TArrayView64<const FColor>(Pixels.GetData(), Pixels.Num()), Png);
+	return FFileHelper::SaveArrayToFile(Png, *FilePath);
 }
 
 AActor* UKeepersCaptureLibrary::FindActorByName(const UObject* WorldContextObject, const FString& Part)

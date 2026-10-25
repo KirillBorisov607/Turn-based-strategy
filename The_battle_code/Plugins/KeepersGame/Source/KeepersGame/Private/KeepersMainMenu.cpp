@@ -212,7 +212,7 @@ TSharedRef<SWidget> UKeepersSettingRow::RebuildWidget()
 	if (WidgetTree && !WidgetTree->RootWidget)
 	{
 		USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Size->SetWidthOverride(560.f);
+		Size->SetWidthOverride(RowWidth);
 		Size->SetHeightOverride(50.f);
 
 		UBorder* Back = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());

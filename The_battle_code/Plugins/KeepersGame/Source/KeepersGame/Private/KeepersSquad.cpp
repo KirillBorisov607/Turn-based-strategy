@@ -487,16 +487,24 @@ TSharedRef<SWidget> UKeepersSquadWidget::RebuildWidget()
 
 		UHorizontalBox* PartyRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		PartyButton = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
-		PartyButton->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Secondary, 20, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->ToggleParty(); } }, 260.f);
+		PartyButton->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Secondary, 20, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->ToggleParty(); } }, 250.f);
 		PartyRow->AddChildToHorizontalBox(PartyButton);
 		UnlockButton = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
-		UnlockButton->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Primary, 18, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->UnlockPendingLook(); } }, 260.f);
+		UnlockButton->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Primary, 18, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->UnlockPendingLook(); } }, 250.f);
 		UnlockButton->SetVisibility(ESlateVisibility::Collapsed);
 		PartyRow->AddChildToHorizontalBox(UnlockButton)->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
-		LockText = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Body(14), KeepersStyle::Gold, true);
-		PartyRow->AddChildToHorizontalBox(LockText)->SetVerticalAlignment(VAlign_Center);
 		Details->AddChildToVerticalBox(PartyRow);
-		Place(Details, FAnchors(1.f, 0.f), FMargin(-580.f, 40.f, 0.f, 0.f), FVector2D::ZeroVector, true);
+		// Lock reasons go under the buttons, so they never push the panel wider.
+		LockText = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Body(14), KeepersStyle::Gold, true);
+		USizeBox* LockSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		LockSize->SetWidthOverride(520.f);
+		LockSize->AddChild(LockText);
+		Details->AddChildToVerticalBox(LockSize)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+		// A fixed width: the panel keeps its place at any resolution and whatever the buttons say.
+		USizeBox* DetailsSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		DetailsSize->SetWidthOverride(530.f);
+		DetailsSize->AddChild(Details);
+		Place(DetailsSize, FAnchors(1.f, 0.f), FMargin(-570.f, 40.f, 0.f, 0.f), FVector2D::ZeroVector, true);
 
 		// Hint and the main buttons, bottom right.
 		UVerticalBox* Actions = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
@@ -622,6 +630,7 @@ void UKeepersSquadWidget::RefreshDetails()
 	}
 	PendingLook = INDEX_NONE;
 	UKeepersSettingRow* LookRow = CreateWidget<UKeepersSettingRow>(this, UKeepersSettingRow::StaticClass());
+	LookRow->SetRowWidth(520.f);
 	const int32 Worn = Party->IsLookUnlocked(Hero, Party->GetLookIndex(Hero)) ? Party->GetLookIndex(Hero) : 0;
 	LookRow->Setup(KeepersSquad::T(TEXT("Наряд")), LookNames, Worn, [WeakThis](int32 Index)
 	{
@@ -643,6 +652,7 @@ void UKeepersSquadWidget::RefreshDetails()
 		}
 	}
 	UKeepersSettingRow* ColorRow = CreateWidget<UKeepersSettingRow>(this, UKeepersSettingRow::StaticClass());
+	ColorRow->SetRowWidth(520.f);
 	ColorRow->Setup(KeepersSquad::T(TEXT("Цвет")), ColorNames, CurrentColor, [WeakThis, Hero](int32 Index)
 	{
 		UKeepersPartySubsystem* PartyNow = UKeepersPartySubsystem::Get(WeakThis.Get());
@@ -725,7 +735,7 @@ void UKeepersSquadWidget::ChooseLook(int32 Look)
 	UnlockButton->SetLabel(FText::FromString(FString::Printf(TEXT("Открыть за %d славы"), Cost)));
 	UnlockButton->SetButtonEnabled(Party->GetGlory() >= Cost);
 	UnlockButton->SetVisibility(ESlateVisibility::Visible);
-	LockText->SetText(FText::FromString(Party->GetGlory() >= Cost ? TEXT("") : TEXT("  Не хватает славы: она даётся за победы в походе.")));
+	LockText->SetText(FText::FromString(Party->GetGlory() >= Cost ? TEXT("") : TEXT("Не хватает славы: она даётся за победы в походе.")));
 }
 
 void UKeepersSquadWidget::UnlockPendingLook()

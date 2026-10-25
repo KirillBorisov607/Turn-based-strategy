@@ -67,6 +67,7 @@ class KEEPERSGAME_API UKeepersSettingRow : public UUserWidget
 
 public:
 	void Setup(const FText& Label, TArray<FText> InOptions, int32 InCurrent, TFunction<void(int32)> InOnChanged);
+	void SetRowWidth(float InWidth) { RowWidth = InWidth; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -81,6 +82,7 @@ private:
 	void Step(int32 Delta);
 
 	FText LabelText;
+	float RowWidth = 560.f;
 	TArray<FText> Options;
 	int32 Current = 0;
 	TFunction<void(int32)> OnChanged;
