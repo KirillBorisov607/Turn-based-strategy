@@ -16,6 +16,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 #include "KeepersCampaign.h"
 #include "KeepersReflection.h"
 #include "KeepersTerrainSubsystem.h"
@@ -136,7 +137,10 @@ TSharedRef<SWidget> UKeepersOptionButton::RebuildWidget()
 		Style.Normal = KeepersUI::Rounded(ButtonColor);
 		Style.Hovered = KeepersUI::Rounded(ButtonColor * 1.35f);
 		Style.Pressed = KeepersUI::Rounded(ButtonColor * 0.8f);
-		Style.Disabled = KeepersUI::Rounded(FLinearColor(0.12f, 0.12f, 0.12f, 0.8f));
+		// Locked cards keep a muted version of their colour, so the map still reads at a glance.
+		FLinearColor Muted = ButtonColor * 0.45f;
+		Muted.A = 0.85f;
+		Style.Disabled = KeepersUI::Rounded(Muted);
 		Style.NormalPadding = FMargin(12.f, 10.f);
 		Style.PressedPadding = FMargin(12.f, 11.f, 12.f, 9.f);
 		Button->SetStyle(Style);
@@ -144,7 +148,7 @@ TSharedRef<SWidget> UKeepersOptionButton::RebuildWidget()
 		Button->OnClicked.AddDynamic(this, &UKeepersOptionButton::HandleClicked);
 
 		UVerticalBox* Lines = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Lines->AddChildToVerticalBox(KeepersUI::MakeText(WidgetTree, TitleText, 17, bIsEnabled ? FLinearColor::White : FLinearColor(0.55f, 0.55f, 0.55f)));
+		Lines->AddChildToVerticalBox(KeepersUI::MakeText(WidgetTree, TitleText, 17, bIsEnabled ? FLinearColor::White : FLinearColor(0.75f, 0.75f, 0.75f)));
 		if (!DescriptionText.IsEmpty())
 		{
 			if (UVerticalBoxSlot* DescriptionSlot = Lines->AddChildToVerticalBox(KeepersUI::MakeText(WidgetTree, DescriptionText, 12, FLinearColor(0.85f, 0.85f, 0.85f), true)))
@@ -256,7 +260,7 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 		WidgetTree->RootWidget = Canvas;
 
 		UBorder* Shade = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		Shade->SetBrushColor(FLinearColor(0.f, 0.02f, 0.05f, 0.45f));
+		Shade->SetBrushColor(FLinearColor(0.f, 0.02f, 0.05f, 0.35f));
 		if (UCanvasPanelSlot* ShadeSlot = Canvas->AddChildToCanvas(Shade))
 		{
 			ShadeSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
@@ -277,15 +281,12 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 			const FKeepersMapNode& Node = Campaign->GetNodes()[I];
 			const bool bVisited = Campaign->GetVisitedNodes().Contains(I);
 			const bool bOpen = Available.Contains(I);
-			FText Label = KeepersUI::NodeName(Node.Type);
-			if (bVisited)
-			{
-				Label = FText::FromString(Label.ToString() + TEXT(" (пройдено)"));
-			}
+			const FText Label = KeepersUI::NodeName(Node.Type);
+			const FText Note = bVisited ? FText::FromString(TEXT("пройдено")) : FText::GetEmpty();
 			UKeepersOptionButton* Button = CreateWidget<UKeepersOptionButton>(this, UKeepersOptionButton::StaticClass());
 			const FLinearColor Color = bVisited ? FLinearColor(0.2f, 0.25f, 0.2f) : KeepersUI::NodeColor(Node.Type);
 			TWeakObjectPtr<UKeepersCampaignMapWidget> WeakThis(this);
-			Button->Setup(Label, FText::GetEmpty(), Color, [WeakThis, I]() { if (WeakThis.IsValid()) { WeakThis->OnNodePicked(I); } },
+			Button->Setup(Label, Note, Color, [WeakThis, I]() { if (WeakThis.IsValid()) { WeakThis->OnNodePicked(I); } },
 				bOpen, Node.Type == EKeepersNodeType::Boss ? 150.f : 120.f);
 			if (UCanvasPanelSlot* NodeSlot = Canvas->AddChildToCanvas(Button))
 			{
@@ -358,7 +359,7 @@ int32 UKeepersCampaignMapWidget::NativePaint(const FPaintArgs& Args, const FGeom
 			const TArray<FVector2D> Points = { A + Direction * 70.f, B - Direction * 70.f };
 			const bool bTaken = Campaign->GetVisitedNodes().Contains(From) && Campaign->GetVisitedNodes().Contains(To);
 			FSlateDrawElement::MakeLines(OutDrawElements, Layer + 1, AllottedGeometry.ToPaintGeometry(), Points, ESlateDrawEffect::None,
-				bTaken ? FLinearColor(1.f, 0.85f, 0.4f, 0.9f) : FLinearColor(1.f, 1.f, 1.f, 0.35f), true, bTaken ? 4.f : 2.f);
+				bTaken ? FLinearColor(1.f, 0.8f, 0.25f, 1.f) : FLinearColor(0.05f, 0.07f, 0.1f, 0.75f), true, bTaken ? 5.f : 3.f);
 		}
 	}
 	return Layer + 1;
@@ -569,6 +570,11 @@ void UKeepersCampaignWorldSubsystem::ShowMap()
 	}
 	bMapShown = true;
 	Campaign->EnsureLoaded();
+
+	// The green hexagon island from the main menu as the region backdrop.
+	FLatentActionInfo Latent;
+	Latent.UUID = 1;
+	UGameplayStatics::LoadStreamLevel(GetWorld(), TEXT("L_Hexagon"), true, false, Latent);
 	Screen = CreateWidget<UKeepersCampaignMapWidget>(Player, UKeepersCampaignMapWidget::StaticClass());
 	Screen->AddToViewport(10);
 	SetUiInput(Screen);
