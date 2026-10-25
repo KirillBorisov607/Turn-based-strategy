@@ -1,4 +1,4 @@
-#include "KeepersCreatureSubsystem.h"
+﻿#include "KeepersCreatureSubsystem.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -17,6 +17,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogKeepersCreatures, Log, All);
 namespace KeepersCreatures
 {
 	static constexpr uint8 SlimeType = 3;   // E_UnitType::Slime
+	static constexpr uint8 ChickenType = 4; // E_UnitType::Chicken
 	static constexpr uint8 NormalTile = 1;  // E_TileType::Normal
 	static constexpr uint8 SlimeTile = 3;   // E_TileType::DoubleCost
 	static const FName SmallSlimeTag = TEXT("SmallSlime");
@@ -103,6 +104,23 @@ namespace KeepersCreatures
 		return true;
 	}
 
+	/** Writes an int in BP_Unit.UnitData.Stats (AP_Max, MP_Max, ...). */
+	static void SetStat(UObject* Unit, const FString& Name, int32 Value)
+	{
+		FProperty* DataProperty = nullptr;
+		void* Data = KeepersReflection::FindValuePtr(Unit->GetClass(), Unit, TEXT("UnitData"), &DataProperty);
+		const FStructProperty* DataStruct = CastField<FStructProperty>(DataProperty);
+		FProperty* StatsProperty = nullptr;
+		void* Stats = DataStruct ? KeepersReflection::FindValuePtr(DataStruct->Struct, Data, TEXT("Stats"), &StatsProperty) : nullptr;
+		const FStructProperty* StatsStruct = CastField<FStructProperty>(StatsProperty);
+		FProperty* StatProperty = nullptr;
+		void* Stat = StatsStruct ? KeepersReflection::FindValuePtr(StatsStruct->Struct, Stats, Name, &StatProperty) : nullptr;
+		if (FIntProperty* IntProperty = CastField<FIntProperty>(StatProperty))
+		{
+			IntProperty->SetPropertyValue(Stat, Value);
+		}
+	}
+
 	static UObject* FindCombatSystem(UWorld* World)
 	{
 		for (TActorIterator<AActor> It(World); It; ++It)
@@ -138,6 +156,19 @@ void UKeepersCreatureSubsystem::Tick(float DeltaTime)
 		return;
 	}
 	UObject* Grid = KeepersReflection::GetObject(CombatSystem, TEXT("Grid"));
+
+	// A round starts each time play returns to team 0.
+	if (const UObject* Current = KeepersReflection::GetObject(CombatSystem, TEXT("CurrentUnit")))
+	{
+		int32 Team = INDEX_NONE;
+		KeepersReflection::GetInt(Current->GetClass(), Current, TEXT("TeamIndex"), Team);
+		if (Team == 0 && LastTeam != 0)
+		{
+			++Round;
+			OnRoundStarted(CombatSystem);
+		}
+		LastTeam = Team;
+	}
 
 	for (UObject* UnitObject : KeepersCreatures::UnitsInCombat(CombatSystem))
 	{
@@ -251,38 +282,120 @@ void UKeepersCreatureSubsystem::Split(UObject* CombatSystem, AActor* Slime, cons
 	}
 
 	UKeepersBarkLibrary::BarkAbout(Slime, EKeepersBarkSituation::Falls);
-	for (const TPair<FIntPoint, FVector>& Spot : Spots)
+	for (int32 Piece = 0; Piece < 2; ++Piece)
 	{
-		AActor* Small = GetWorld()->SpawnActorDeferred<AActor>(Slime->GetClass(), FTransform(Spot.Value + FVector(0.f, 0.f, 100.f)), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		if (!Small)
+		if (AActor* Small = SpawnUnitNear(CombatSystem, Slime->GetClass(), KeepersCreatures::SlimeType, Index, SlimeTeam, SmallSlimeHp, 0.65f, KeepersCreatures::SmallSlimeTag, false))
 		{
-			continue;
+			UE_LOG(LogKeepersCreatures, Log, TEXT("Slime split: %s"), *Small->GetName());
 		}
-		if (FByteProperty* TypeProperty = CastField<FByteProperty>(KeepersReflection::FindMember(Small->GetClass(), TEXT("UnitType"))))
-		{
-			TypeProperty->SetPropertyValue_InContainer(Small, KeepersCreatures::SlimeType);
-		}
-		Small->Tags.Add(KeepersCreatures::SmallSlimeTag);
-		UGameplayStatics::FinishSpawningActor(Small, FTransform(Spot.Value + FVector(0.f, 0.f, 100.f)));
-		Small->SetActorScale3D(FVector(0.65f));
+	}
+}
 
-		KeepersReflection::FCall Add(CombatSystem, TEXT("AddUnitInCombat"));
-		Add.Set<UObject*>(TEXT("Unit"), Small);
-		Add.Set<FIntPoint>(TEXT("Index"), Spot.Key);
-		Add.Set<int32>(TEXT("TeamIndex"), SlimeTeam);
-		Add.Set<bool>(TEXT("UseAi"), true);
-		Add.Call();
-		KeepersReflection::FCall(Small, TEXT("CombatStarted")).Call();
-		if (UObject* Ai = KeepersReflection::GetObject(Small, TEXT("Ai")))
+void UKeepersCreatureSubsystem::OnRoundStarted(UObject* CombatSystem)
+{
+	if (Round <= 1 || (Round - 1) % ChickenCallEvery != 0)
+	{
+		return;
+	}
+	if (ChickenCalls >= ChickenMaxCalls)
+	{
+		return;
+	}
+	TArray<AActor*> Chickens;
+	for (UObject* UnitObject : KeepersCreatures::UnitsInCombat(CombatSystem))
+	{
+		AActor* Chicken = Cast<AActor>(UnitObject);
+		int32 Team = 0;
+		if (Chicken && KeepersCreatures::UnitType(Chicken) == KeepersCreatures::ChickenType && KeepersCreatures::IsAlive(Chicken)
+			&& KeepersReflection::GetInt(Chicken->GetClass(), Chicken, TEXT("TeamIndex"), Team) && Team != 0)
 		{
-			KeepersReflection::FCall(Ai, TEXT("AiCombatStarted")).Call();
+			Chickens.Add(Chicken);
 		}
-		KeepersReflection::FCall SetHp(Small, TEXT("SetCurrentHp"));
-		SetHp.Set<int32>(TEXT("Hp"), SmallSlimeHp);
+	}
+	if (Chickens.Num() == 0)
+	{
+		return;
+	}
+	AActor* Chicken = Chickens[FMath::RandRange(0, Chickens.Num() - 1)];
+	int32 Team = 0;
+	KeepersReflection::GetInt(Chicken->GetClass(), Chicken, TEXT("TeamIndex"), Team);
+	FIntPoint Index;
+	KeepersReflection::GetIntPoint(Chicken->GetClass(), Chicken, TEXT("Index"), Index);
+	if (AActor* Help = SpawnUnitNear(CombatSystem, Chicken->GetClass(), KeepersCreatures::SlimeType, Index, Team, 0, 1.f, NAME_None))
+	{
+		++ChickenCalls;
+		UKeepersBarkLibrary::Bark(Chicken, FText::FromString(TEXT("Ко-ко-КО! На помощь!")));
+		UE_LOG(LogKeepersCreatures, Log, TEXT("%s called %s"), *Chicken->GetName(), *Help->GetName());
+	}
+}
+
+AActor* UKeepersCreatureSubsystem::SpawnUnitNear(UObject* CombatSystem, UClass* UnitClass, uint8 UnitType, const FIntPoint& Index, int32 Team, int32 Hp, float Scale, FName Tag, bool bCanAct)
+{
+	UObject* Grid = KeepersReflection::GetObject(CombatSystem, TEXT("Grid"));
+	FIntPoint Spot;
+	FVector SpotLocation;
+	bool bFound = false;
+	for (int32 Ring = 1; Ring <= 2 && !bFound; ++Ring)
+	{
+		for (int32 DX = -Ring; DX <= Ring && !bFound; ++DX)
+		{
+			for (int32 DY = -Ring; DY <= Ring && !bFound; ++DY)
+			{
+				const FIntPoint Candidate(Index.X + DX, Index.Y + DY);
+				if (Candidate != Index && KeepersCreatures::IsFreeWalkable(Grid, Candidate, SpotLocation))
+				{
+					Spot = Candidate;
+					bFound = true;
+				}
+			}
+		}
+	}
+	if (!bFound || !UnitClass)
+	{
+		return nullptr;
+	}
+
+	const FTransform SpawnTransform(SpotLocation + FVector(0.f, 0.f, 100.f));
+	AActor* Unit = GetWorld()->SpawnActorDeferred<AActor>(UnitClass, SpawnTransform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Unit)
+	{
+		return nullptr;
+	}
+	if (FByteProperty* TypeProperty = CastField<FByteProperty>(KeepersReflection::FindMember(Unit->GetClass(), TEXT("UnitType"))))
+	{
+		TypeProperty->SetPropertyValue_InContainer(Unit, UnitType);
+	}
+	if (!Tag.IsNone())
+	{
+		Unit->Tags.Add(Tag);
+	}
+	UGameplayStatics::FinishSpawningActor(Unit, SpawnTransform);
+	Unit->SetActorScale3D(FVector(Scale));
+
+	KeepersReflection::FCall Add(CombatSystem, TEXT("AddUnitInCombat"));
+	Add.Set<UObject*>(TEXT("Unit"), Unit);
+	Add.Set<FIntPoint>(TEXT("Index"), Spot);
+	Add.Set<int32>(TEXT("TeamIndex"), Team);
+	Add.Set<bool>(TEXT("UseAi"), true);
+	Add.Call();
+	KeepersReflection::FCall(Unit, TEXT("CombatStarted")).Call();
+	if (UObject* Ai = KeepersReflection::GetObject(Unit, TEXT("Ai")))
+	{
+		KeepersReflection::FCall(Ai, TEXT("AiCombatStarted")).Call();
+	}
+	if (!bCanAct)
+	{
+		KeepersCreatures::SetStat(Unit, TEXT("AP_Max"), 0);
+		KeepersCreatures::SetStat(Unit, TEXT("AP_Current"), 0);
+	}
+	if (Hp > 0)
+	{
+		KeepersReflection::FCall SetHp(Unit, TEXT("SetCurrentHp"));
+		SetHp.Set<int32>(TEXT("Hp"), Hp);
 		SetHp.Set<bool>(TEXT("ShowNumber"), false);
 		SetHp.Call();
-		UE_LOG(LogKeepersCreatures, Log, TEXT("Slime split: small slime at (%d,%d)"), Spot.Key.X, Spot.Key.Y);
 	}
+	return Unit;
 }
 
 TStatId UKeepersCreatureSubsystem::GetStatId() const
