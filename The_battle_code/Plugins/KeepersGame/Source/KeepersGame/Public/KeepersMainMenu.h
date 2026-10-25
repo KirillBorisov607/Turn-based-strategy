@@ -187,6 +187,8 @@ public:
 	void RotatePreview(float DeltaYaw);
 	/** A hero's outfit or colour changed: updates the preview, the portrait and the hero at the fire. */
 	void RefreshHero(FName Hero);
+	/** Puts an outfit on the preview hero only (trying on a closed outfit). */
+	void TryOnLook(FName Hero, int32 Look);
 	/** The squad changed: the heroes sitting at the fire. */
 	void RefreshCamp();
 	/** Live portrait of a hero for the cards. */
@@ -199,6 +201,10 @@ public:
 	/** Squad screen test hooks: choose a hero, play an ability by index. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers")
 	void TestSquad(FName Hero, int32 Ability);
+
+	/** Squad screen test hook: choose an outfit of the shown hero, and open it if it is closed. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers")
+	void TestLook(int32 Look, bool bUnlock);
 
 	/** Where the camp fire burns. */
 	UPROPERTY(EditAnywhere, Category = "Keepers")

@@ -22,6 +22,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Capture", meta = (WorldContext = "WorldContextObject"))
 	static bool CaptureViewport(const UObject* WorldContextObject, const FString& FilePath);
 
+	/** Slate state for tests: modal window, mouse captor, focus and the widgets under the cursor. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Capture")
+	static FString DescribeSlate();
+
 	/** The first actor whose name contains Part, in the world of WorldContextObject. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Capture", meta = (WorldContext = "WorldContextObject"))
 	static AActor* FindActorByName(const UObject* WorldContextObject, const FString& Part);

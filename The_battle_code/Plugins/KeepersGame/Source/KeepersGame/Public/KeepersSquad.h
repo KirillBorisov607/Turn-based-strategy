@@ -132,6 +132,10 @@ public:
 
 	void SelectHero(FName Hero);
 
+	/** The outfit switcher moved: wear it if open, otherwise try it on and offer to open it. */
+	void ChooseLook(int32 Look);
+	void UnlockPendingLook();
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
@@ -144,10 +148,13 @@ private:
 	void RefreshDetails();
 	void ShowAbility(int32 Index, bool bPlay);
 	void ToggleParty();
+	void RefreshGlory();
 
 	FName Selected;
 	bool bDragging = false;
 	int32 ActiveAbility = INDEX_NONE;
+	/** A closed outfit being tried on, or INDEX_NONE. */
+	int32 PendingLook = INDEX_NONE;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UKeepersHeroCard>> RosterCards;
@@ -187,6 +194,12 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UKeepersFnButton> PartyButton;
+
+	UPROPERTY()
+	TObjectPtr<UKeepersFnButton> UnlockButton;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> GloryText;
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> LockText;

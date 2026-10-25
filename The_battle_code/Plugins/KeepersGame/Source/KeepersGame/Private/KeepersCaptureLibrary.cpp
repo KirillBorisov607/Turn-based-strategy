@@ -108,6 +108,35 @@ bool UKeepersCaptureLibrary::CaptureViewport(const UObject* WorldContextObject, 
 	return FFileHelper::SaveArrayToFile(Png, *FilePath);
 }
 
+FString UKeepersCaptureLibrary::DescribeSlate()
+{
+	if (!FSlateApplication::IsInitialized())
+	{
+		return TEXT("no slate");
+	}
+	FSlateApplication& Slate = FSlateApplication::Get();
+	FString Result;
+	TSharedPtr<SWindow> Modal = Slate.GetActiveModalWindow();
+	const FString Line = TEXT("\n");
+	const TSharedPtr<SWidget> Focus = Slate.GetKeyboardFocusedWidget();
+	Result += TEXT("modal=") + (Modal.IsValid() ? Modal->GetTitle().ToString() : FString(TEXT("none"))) + Line;
+	Result += TEXT("captor=") + FString(Slate.HasAnyMouseCaptor() ? TEXT("yes") : TEXT("none")) + Line;
+	Result += TEXT("focus=") + (Focus.IsValid() ? Focus->GetTypeAsString() : FString(TEXT("none"))) + Line;
+	Result += TEXT("pressed=") + FString::FromInt(Slate.GetPressedMouseButtons().Num()) + TEXT(" cursor=") + Slate.GetCursorPos().ToString() + Line;
+	TArray<TSharedRef<SWindow>> Windows;
+	Slate.GetAllVisibleWindowsOrdered(Windows);
+	for (const TSharedRef<SWindow>& Window : Windows)
+	{
+		Result += TEXT("window '") + Window->GetTitle().ToString() + TEXT("' ") + Window->GetRectInScreen().ToString() + Line;
+	}
+	FWidgetPath Path = Slate.LocateWindowUnderMouse(Slate.GetCursorPos(), Slate.GetInteractiveTopLevelWindows());
+	for (int32 Index = FMath::Max(Path.Widgets.Num() - 6, 0); Index < Path.Widgets.Num(); ++Index)
+	{
+		Result += TEXT("  under: ") + Path.Widgets[Index].Widget->GetTypeAsString() + Line;
+	}
+	return Result;
+}
+
 AActor* UKeepersCaptureLibrary::FindActorByName(const UObject* WorldContextObject, const FString& Part)
 {
 	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;

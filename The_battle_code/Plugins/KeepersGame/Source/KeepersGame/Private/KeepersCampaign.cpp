@@ -1,4 +1,5 @@
 ﻿#include "KeepersCampaign.h"
+#include "KeepersHeroes.h"
 #include "KeepersLoadingScreen.h"
 
 #include "Engine/GameInstance.h"
@@ -297,6 +298,12 @@ void UKeepersCampaignSubsystem::CompleteCurrentNode()
 		return;
 	}
 	Save->VisitedNodes.AddUnique(Save->CurrentNode);
+	// Glory for every won battle: more for elites and the boss.
+	if (UKeepersPartySubsystem* Party = GetGameInstance()->GetSubsystem<UKeepersPartySubsystem>())
+	{
+		const EKeepersNodeType Type = Save->Nodes[Save->CurrentNode].Type;
+		Party->AddGlory(Type == EKeepersNodeType::Boss ? 40 : Type == EKeepersNodeType::Elite ? 12 : Type == EKeepersNodeType::Battle ? 6 : 0);
+	}
 	if (IsBossNode(Save->CurrentNode))
 	{
 		UE_LOG(LogKeepersCampaign, Log, TEXT("Campaign won"));
@@ -312,6 +319,11 @@ void UKeepersCampaignSubsystem::CompleteCurrentNode()
 void UKeepersCampaignSubsystem::FailCampaign()
 {
 	UE_LOG(LogKeepersCampaign, Log, TEXT("Campaign lost"));
+	// A lost run still brings some glory: two for every place visited.
+	if (UKeepersPartySubsystem* Party = GetGameInstance()->GetSubsystem<UKeepersPartySubsystem>())
+	{
+		Party->AddGlory(Save->VisitedNodes.Num() * 2);
+	}
 	bActive = false;
 	UGameplayStatics::DeleteGameInSlot(SaveSlot, 0);
 	OpenLevel(MainMenuLevel);

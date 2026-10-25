@@ -1,10 +1,13 @@
 #include "KeepersHeroes.h"
 
 #include "Animation/AnimInstance.h"
+#include "Components/PointLightComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
@@ -371,7 +374,35 @@ FKeepersLook UKeepersPartySubsystem::GetLook(FName Hero) const
 	{
 		return FKeepersLook();
 	}
-	return Def->Looks[FMath::Clamp(GetLookIndex(Hero), 0, Def->Looks.Num() - 1)];
+	const int32 Look = FMath::Clamp(GetLookIndex(Hero), 0, Def->Looks.Num() - 1);
+	return Def->Looks[IsLookUnlocked(Hero, Look) ? Look : 0];
+}
+
+void UKeepersPartySubsystem::AddGlory(int32 Amount)
+{
+	Save->Glory = FMath::Max(Save->Glory + Amount, 0);
+	WriteSave();
+}
+
+bool UKeepersPartySubsystem::IsLookUnlocked(FName Hero, int32 Look) const
+{
+	return Look <= 0 || Save->UnlockedLooks.Contains(FName(*FString::Printf(TEXT("%s:%d"), *Hero.ToString(), Look)));
+}
+
+bool UKeepersPartySubsystem::UnlockLook(FName Hero, int32 Look)
+{
+	if (IsLookUnlocked(Hero, Look))
+	{
+		return true;
+	}
+	if (Save->Glory < LookCost(Look))
+	{
+		return false;
+	}
+	Save->Glory -= LookCost(Look);
+	Save->UnlockedLooks.Add(FName(*FString::Printf(TEXT("%s:%d"), *Hero.ToString(), Look)));
+	WriteSave();
+	return true;
 }
 
 void UKeepersPartySubsystem::WriteSave() const
@@ -451,6 +482,82 @@ void UKeepersHeroLookSubsystem::Tick(float DeltaTime)
 	}
 }
 
+void UKeepersHeroLookSubsystem::LookFor(const FKeepersHeroDef& Hero, int32 Team, FKeepersLook& OutLook, FName& OutColor) const
+{
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(GetWorld());
+	if (Team == 0 && Party)
+	{
+		OutLook = Party->GetLook(Hero.Id);
+		OutColor = Party->GetColor(Hero.Id);
+		return;
+	}
+	// Enemy heroes: another outfit than the player's and a colour per enemy team.
+	const int32 PlayerLook = Party ? Party->GetLookIndex(Hero.Id) : 0;
+	OutLook = Hero.Looks[(PlayerLook + 1) % Hero.Looks.Num()];
+	static const FName EnemyColors[] = { TEXT("Red"), TEXT("Purple"), TEXT("Yellow") };
+	OutColor = EnemyColors[(FMath::Max(Team, 1) - 1) % UE_ARRAY_COUNT(EnemyColors)];
+}
+
+UTextureRenderTarget2D* UKeepersHeroLookSubsystem::GetPortrait(FName HeroId, bool bEnemy)
+{
+	const FName Key(*FString::Printf(TEXT("%s_%d"), *HeroId.ToString(), bEnemy ? 1 : 0));
+	if (const TObjectPtr<UTextureRenderTarget2D>* Found = Portraits.Find(Key))
+	{
+		return Found->Get();
+	}
+	const FKeepersHeroDef* Hero = KeepersHeroes::Find(HeroId);
+	UWorld* World = GetWorld();
+	if (!Hero || Hero->Looks.Num() == 0 || !World)
+	{
+		return nullptr;
+	}
+	if (!Studio)
+	{
+		// High above the field, out of every battle camera.
+		Studio = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(FVector(0.f, 0.f, 9000.f)));
+		USceneComponent* Root = NewObject<USceneComponent>(Studio, TEXT("Root"));
+		Studio->SetRootComponent(Root);
+		Root->RegisterComponent();
+		UPointLightComponent* Light = NewObject<UPointLightComponent>(Studio);
+		Light->SetupAttachment(Root);
+		Light->SetRelativeLocation(FVector(-300.f, -500.f, 350.f));
+		Light->SetIntensity(80000.f);
+		Light->SetAttenuationRadius(6000.f);
+		Light->SetCastShadows(false);
+		Light->RegisterComponent();
+	}
+	const FVector Spot = Studio->GetActorLocation() + FVector(Portraits.Num() * 400.f, 0.f, 0.f);
+	FKeepersLook Look;
+	FName Color;
+	LookFor(*Hero, bEnemy ? 1 : 0, Look, Color);
+	UKeepersFigureComponent* Figure = NewObject<UKeepersFigureComponent>(Studio);
+	Figure->SetupAttachment(Studio->GetRootComponent());
+	Figure->SetWorldLocation(Spot);
+	// Facing -Y, towards the camera.
+	Figure->SetWorldRotation(FRotator(0.f, 180.f, 0.f));
+	Figure->RegisterComponent();
+	Figure->SetLook(Look);
+	Figure->SetColor(Color);
+
+	UTextureRenderTarget2D* Target = NewObject<UTextureRenderTarget2D>(this);
+	Target->InitCustomFormat(192, 192, PF_B8G8R8A8, true);
+	USceneCaptureComponent2D* Capture = NewObject<USceneCaptureComponent2D>(Studio);
+	Capture->SetupAttachment(Studio->GetRootComponent());
+	// Head and shoulders.
+	Capture->SetWorldLocationAndRotation(Spot + FVector(0.f, -200.f, 140.f), FRotator(-6.f, 90.f, 0.f));
+	Capture->FOVAngle = 30.f;
+	Capture->TextureTarget = Target;
+	Capture->CaptureSource = SCS_FinalColorLDR;
+	Capture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+	Capture->ShowOnlyComponents.Append(Figure->GetParts());
+	Capture->ShowFlags.SetFog(false);
+	Capture->ShowFlags.SetEyeAdaptation(false);
+	Capture->bCaptureEveryFrame = true;
+	Capture->RegisterComponent();
+	Portraits.Add(Key, Target);
+	return Target;
+}
+
 void UKeepersHeroLookSubsystem::Dress(ACharacter* Unit)
 {
 	USkeletalMeshComponent* Mesh = Unit ? Unit->GetMesh() : nullptr;
@@ -462,22 +569,9 @@ void UKeepersHeroLookSubsystem::Dress(ACharacter* Unit)
 
 	int32 Team = 0;
 	KeepersReflection::GetInt(Unit->GetClass(), Unit, TEXT("TeamIndex"), Team);
-	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(Unit);
 	FKeepersLook Look;
 	FName Color;
-	if (Team == 0 && Party)
-	{
-		Look = Party->GetLook(Hero->Id);
-		Color = Party->GetColor(Hero->Id);
-	}
-	else
-	{
-		// Enemy heroes: another outfit than the player's and a colour per enemy team.
-		const int32 PlayerLook = Party ? Party->GetLookIndex(Hero->Id) : 0;
-		Look = Hero->Looks[(PlayerLook + 1) % Hero->Looks.Num()];
-		static const FName EnemyColors[] = { TEXT("Red"), TEXT("Purple"), TEXT("Yellow") };
-		Color = EnemyColors[(FMath::Max(Team, 1) - 1) % UE_ARRAY_COUNT(EnemyColors)];
-	}
+	LookFor(*Hero, Team, Look, Color);
 
 	// The old mesh keeps animating out of sight: its Anim Blueprint holds the state the figure mirrors.
 	Mesh->SetVisibility(false, false);

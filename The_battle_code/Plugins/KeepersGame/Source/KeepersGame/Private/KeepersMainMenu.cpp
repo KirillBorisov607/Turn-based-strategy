@@ -55,7 +55,7 @@
 
 namespace KeepersMenu
 {
-	static const TCHAR* Version = TEXT("Хранители земель · сборка 0.4");
+	static const TCHAR* Version = TEXT("Хранители земель · сборка 0.5");
 
 	struct FQuickBattle
 	{
@@ -1087,6 +1087,17 @@ void AKeepersMenuScene::RefreshHero(FName Hero)
 	}
 }
 
+void AKeepersMenuScene::TryOnLook(FName Hero, int32 Look)
+{
+	const FKeepersHeroDef* Def = KeepersHeroes::Find(Hero);
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(this);
+	if (Preview && Def && Def->Looks.IsValidIndex(Look) && Hero == PreviewHero)
+	{
+		Preview->SetLook(Def->Looks[Look]);
+		Preview->SetColor(Party ? Party->GetColor(Hero) : FName(TEXT("Blue")));
+	}
+}
+
 void AKeepersMenuScene::PlayPreview(EKeepersPose Pose)
 {
 	if (Preview)
@@ -1196,8 +1207,8 @@ void AKeepersMenuScene::PlayAbility(FName Hero, FName Spell)
 	{
 		if (AKeepersRockActor* Rock = GetWorld()->SpawnActor<AKeepersRockActor>(AKeepersRockActor::StaticClass(), FTransform(Middle)))
 		{
-			Rock->SetActorScale3D(FVector(0.35f));
-			Rock->Rise(FVector(Middle.X, Middle.Y, GroundZ(Middle)), GroundZ(Middle) + 70.f);
+			Rock->SetActorScale3D(FVector(0.22f));
+			Rock->Rise(FVector(Middle.X, Middle.Y, GroundZ(Middle)), GroundZ(Middle) + 45.f);
 			AddActorEffect(Rock, 2.6f);
 		}
 	}
@@ -1316,6 +1327,21 @@ void AKeepersMenuScene::OpenSquadScreen(bool bStartCampaign)
 	if (Menu)
 	{
 		Menu->OpenSquad(bStartCampaign);
+	}
+}
+
+void AKeepersMenuScene::TestLook(int32 Look, bool bUnlock)
+{
+	for (TObjectIterator<UKeepersSquadWidget> It; It; ++It)
+	{
+		if (It->GetWorld() == GetWorld() && It->IsInViewport())
+		{
+			It->ChooseLook(Look);
+			if (bUnlock)
+			{
+				It->UnlockPendingLook();
+			}
+		}
 	}
 }
 

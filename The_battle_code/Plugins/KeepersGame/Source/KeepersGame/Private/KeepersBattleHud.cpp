@@ -5,6 +5,10 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "KeepersHeroes.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -324,9 +328,34 @@ void UKeepersBattleHudSubsystem::RefreshDynamic(UUserWidget* Hud)
 	// Portraits, HP bars and unit names are created and recoloured by the Blueprints as the battle
 	// goes, so they are styled here repeatedly; the Blueprints keep driving the team colours.
 	const int32 StyledBefore = StyledWidgets.Num();
-	KeepersHud::ForEachWidgetDeep(Hud, [this](UWidget* Widget)
+	UKeepersHeroLookSubsystem* Looks = GetWorld() ? GetWorld()->GetSubsystem<UKeepersHeroLookSubsystem>() : nullptr;
+	KeepersHud::ForEachWidgetDeep(Hud, [this, Looks](UWidget* Widget)
 	{
 		const FName Name = Widget->GetFName();
+		if (UImage* Image = Cast<UImage>(Widget))
+		{
+			// Hero icons (TX_Icon_Warrior...) become live portraits of the Toony figures.
+			const UTexture2D* Icon = Cast<UTexture2D>(Image->GetBrush().GetResourceObject());
+			FString Type;
+			if (Looks && Icon && Icon->GetName().Split(TEXT("TX_Icon_"), nullptr, &Type) && KeepersHeroes::Find(*Type))
+			{
+				// The card's team ring tells friend from foe (the Blueprint tints it blue or red).
+				bool bEnemy = false;
+				if (const UUserWidget* Card = Image->GetTypedOuter<UUserWidget>())
+				{
+					if (const UBorder* Ring = Card->WidgetTree ? Cast<UBorder>(Card->WidgetTree->FindWidget(TEXT("Border_TeamColor"))) : nullptr)
+					{
+						const FLinearColor Tint = Ring->GetBrushColor();
+						bEnemy = Tint.R > Tint.B;
+					}
+				}
+				if (UTextureRenderTarget2D* Portrait = Looks->GetPortrait(*Type, bEnemy))
+				{
+					Image->SetBrushResourceObject(Portrait);
+				}
+			}
+			return;
+		}
 		if (UTextBlock* Text = Cast<UTextBlock>(Widget))
 		{
 			if (Name == TEXT("Text_UnitName"))

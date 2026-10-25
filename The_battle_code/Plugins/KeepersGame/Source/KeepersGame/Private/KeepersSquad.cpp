@@ -423,8 +423,16 @@ TSharedRef<SWidget> UKeepersSquadWidget::RebuildWidget()
 		UVerticalBox* TitleBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 		TitleBox->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, KeepersSquad::T(TEXT("перед походом")), KeepersStyle::Heading(18), KeepersStyle::Gold));
 		TitleBox->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, KeepersSquad::T(TEXT("Соберите отряд")), KeepersStyle::Heading(54)));
+		UHorizontalBox* CountRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		SquadCount = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Body(15), KeepersStyle::TextDim);
-		TitleBox->AddChildToVerticalBox(SquadCount)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+		CountRow->AddChildToHorizontalBox(SquadCount)->SetVerticalAlignment(VAlign_Center);
+		UBorder* GloryPill = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		GloryPill->SetBrush(KeepersStyle::Panel(FLinearColor(1.f, 0.74f, 0.3f, 0.16f), 10.f, KeepersStyle::GoldDim, 1.f));
+		GloryPill->SetPadding(FMargin(10.f, 2.f));
+		GloryText = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Heading(16), KeepersStyle::Gold);
+		GloryPill->SetContent(GloryText);
+		CountRow->AddChildToHorizontalBox(GloryPill)->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
+		TitleBox->AddChildToVerticalBox(CountRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 		Slots = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		TitleBox->AddChildToVerticalBox(Slots);
 		Place(TitleBox, FAnchors(0.f, 0.f), FMargin(60.f, 46.f, 0.f, 0.f), FVector2D::ZeroVector, true);
@@ -481,6 +489,10 @@ TSharedRef<SWidget> UKeepersSquadWidget::RebuildWidget()
 		PartyButton = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
 		PartyButton->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Secondary, 20, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->ToggleParty(); } }, 260.f);
 		PartyRow->AddChildToHorizontalBox(PartyButton);
+		UnlockButton = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
+		UnlockButton->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Primary, 18, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->UnlockPendingLook(); } }, 260.f);
+		UnlockButton->SetVisibility(ESlateVisibility::Collapsed);
+		PartyRow->AddChildToHorizontalBox(UnlockButton)->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
 		LockText = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Body(14), KeepersStyle::Gold, true);
 		PartyRow->AddChildToHorizontalBox(LockText)->SetVerticalAlignment(VAlign_Center);
 		Details->AddChildToVerticalBox(PartyRow);
@@ -602,21 +614,20 @@ void UKeepersSquadWidget::RefreshDetails()
 	Outfit->ClearChildren();
 	const FName Hero = Selected;
 	TArray<FText> LookNames;
-	for (const FKeepersLook& Look : Def->Looks)
+	for (int32 I = 0; I < Def->Looks.Num(); ++I)
 	{
-		LookNames.Add(Look.Name);
+		// Closed outfits show their price.
+		LookNames.Add(Party->IsLookUnlocked(Hero, I) ? Def->Looks[I].Name
+			: FText::FromString(FString::Printf(TEXT("%s · %d"), *Def->Looks[I].Name.ToString(), UKeepersPartySubsystem::LookCost(I))));
 	}
+	PendingLook = INDEX_NONE;
 	UKeepersSettingRow* LookRow = CreateWidget<UKeepersSettingRow>(this, UKeepersSettingRow::StaticClass());
-	LookRow->Setup(KeepersSquad::T(TEXT("Наряд")), LookNames, Party->GetLookIndex(Hero), [WeakThis, Hero](int32 Index)
+	const int32 Worn = Party->IsLookUnlocked(Hero, Party->GetLookIndex(Hero)) ? Party->GetLookIndex(Hero) : 0;
+	LookRow->Setup(KeepersSquad::T(TEXT("Наряд")), LookNames, Worn, [WeakThis](int32 Index)
 	{
-		UKeepersPartySubsystem* PartyNow = UKeepersPartySubsystem::Get(WeakThis.Get());
-		if (PartyNow && WeakThis.IsValid())
+		if (WeakThis.IsValid())
 		{
-			PartyNow->SetLookIndex(Hero, Index);
-			if (AKeepersMenuScene* MenuScene = WeakThis->Scene.Get())
-			{
-				MenuScene->RefreshHero(Hero);
-			}
+			WeakThis->ChooseLook(Index);
 		}
 	});
 	Outfit->AddChildToVerticalBox(LookRow)->SetPadding(FMargin(0.f, 2.f));
@@ -677,9 +688,69 @@ void UKeepersSquadWidget::RefreshDetails()
 	}
 
 	const bool bUnlocked = Party->IsUnlocked(Hero);
+	UnlockButton->SetVisibility(ESlateVisibility::Collapsed);
+	RefreshGlory();
 	PartyButton->SetVisibility(bUnlocked ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	PartyButton->SetLabel(KeepersSquad::T(Party->IsInParty(Hero) ? TEXT("Убрать из отряда") : TEXT("Взять в отряд")));
 	LockText->SetText(bUnlocked ? FText::GetEmpty() : FText::FromString(TEXT("Откроется: ") + Def->Unlock.ToString()));
+}
+
+void UKeepersSquadWidget::ChooseLook(int32 Look)
+{
+	UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(this);
+	AKeepersMenuScene* MenuScene = Scene.Get();
+	if (!Party)
+	{
+		return;
+	}
+	if (Party->IsLookUnlocked(Selected, Look))
+	{
+		PendingLook = INDEX_NONE;
+		Party->SetLookIndex(Selected, Look);
+		if (MenuScene)
+		{
+			MenuScene->RefreshHero(Selected);
+		}
+		UnlockButton->SetVisibility(ESlateVisibility::Collapsed);
+		LockText->SetText(FText::GetEmpty());
+		return;
+	}
+	// Closed: try it on, and offer to open it.
+	PendingLook = Look;
+	if (MenuScene)
+	{
+		MenuScene->TryOnLook(Selected, Look);
+	}
+	const int32 Cost = UKeepersPartySubsystem::LookCost(Look);
+	UnlockButton->SetLabel(FText::FromString(FString::Printf(TEXT("Открыть за %d славы"), Cost)));
+	UnlockButton->SetButtonEnabled(Party->GetGlory() >= Cost);
+	UnlockButton->SetVisibility(ESlateVisibility::Visible);
+	LockText->SetText(FText::FromString(Party->GetGlory() >= Cost ? TEXT("") : TEXT("  Не хватает славы: она даётся за победы в походе.")));
+}
+
+void UKeepersSquadWidget::UnlockPendingLook()
+{
+	UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(this);
+	if (!Party || PendingLook == INDEX_NONE || !Party->UnlockLook(Selected, PendingLook))
+	{
+		return;
+	}
+	Party->SetLookIndex(Selected, PendingLook);
+	if (AKeepersMenuScene* MenuScene = Scene.Get())
+	{
+		MenuScene->RefreshHero(Selected);
+		MenuScene->PlayPreview(EKeepersPose::Cast);
+	}
+	RefreshDetails();
+}
+
+void UKeepersSquadWidget::RefreshGlory()
+{
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(this);
+	if (Party && GloryText)
+	{
+		GloryText->SetText(FText::FromString(FString::Printf(TEXT("Слава: %d"), Party->GetGlory())));
+	}
 }
 
 void UKeepersSquadWidget::ShowAbility(int32 Index, bool bPlay)

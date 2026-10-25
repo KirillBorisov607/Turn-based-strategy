@@ -7,6 +7,7 @@
 #include "KeepersHeroes.generated.h"
 
 class ACharacter;
+class UTextureRenderTarget2D;
 
 /** An ability as the squad screen and tooltips describe it. */
 struct FKeepersSpellInfo
@@ -92,6 +93,14 @@ public:
 	/** Heroes in the squad, in slot order. */
 	UPROPERTY(SaveGame)
 	TArray<FName> Party;
+
+	/** Glory: earned in every run, won or lost, and spent on outfits. */
+	UPROPERTY(SaveGame)
+	int32 Glory = 60;
+
+	/** Opened outfits as "Hero:Index"; the first outfit of every hero is always open. */
+	UPROPERTY(SaveGame)
+	TArray<FName> UnlockedLooks;
 };
 
 /**
@@ -127,6 +136,14 @@ public:
 	/** The look a hero wears now. */
 	FKeepersLook GetLook(FName Hero) const;
 
+	int32 GetGlory() const { return Save->Glory; }
+	void AddGlory(int32 Amount);
+	bool IsLookUnlocked(FName Hero, int32 Look) const;
+	/** Price of an outfit in glory: the further down the list, the dearer. */
+	static int32 LookCost(int32 Look) { return Look * 25; }
+	/** Spends glory on an outfit; false when there is not enough. */
+	bool UnlockLook(FName Hero, int32 Look);
+
 	void WriteSave() const;
 
 private:
@@ -152,8 +169,16 @@ public:
 	virtual TStatId GetStatId() const override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
+	/**
+	 * Live portrait of a hero as it looks in this battle (the player's outfit, or the enemy one), filmed in a
+	 * small studio high above the field; the battle HUD shows it instead of the old icons.
+	 */
+	UTextureRenderTarget2D* GetPortrait(FName Hero, bool bEnemy);
+
 private:
 	void Dress(ACharacter* Unit);
+	/** Outfit and colour of a hero unit of a team. */
+	void LookFor(const struct FKeepersHeroDef& Hero, int32 Team, FKeepersLook& OutLook, FName& OutColor) const;
 
 	struct FDressed
 	{
@@ -163,6 +188,12 @@ private:
 	};
 
 	TArray<FDressed> Dressed;
+
+	UPROPERTY()
+	TObjectPtr<AActor> Studio;
+
+	UPROPERTY()
+	TMap<FName, TObjectPtr<UTextureRenderTarget2D>> Portraits;
 	TSet<TWeakObjectPtr<ACharacter>> Seen;
 	float ScanTimer = 0.f;
 };
