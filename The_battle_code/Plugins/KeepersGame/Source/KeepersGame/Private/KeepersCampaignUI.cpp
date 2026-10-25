@@ -352,23 +352,15 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 		}
 
 		// Artifacts owned.
-		TArray<FString> Owned;
-		for (const FName& Id : Campaign->GetArtifacts())
-		{
-			if (const FKeepersArtifact* Artifact = UKeepersCampaignSubsystem::FindArtifact(Id))
-			{
-				Owned.Add(Artifact->Name.ToString());
-			}
-		}
-		const FString ArtifactsLine = FString::Printf(TEXT("Золото: %d   ·   "), Campaign->GetGold())
-			+ (Owned.Num() > 0 ? TEXT("Артефакты: ") + FString::Join(Owned, TEXT(", ")) : TEXT("Артефактов пока нет — их дают победы, руины и торговец на привале."));
+		const FString ArtifactsLine = StatusLine();
 		// Bottom bar: artifacts on the left, back to the menu on the right.
 		UBorder* BottomBar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		BottomBar->SetBrush(KeepersStyle::Panel(FLinearColor(0.f, 0.f, 0.f, 0.6f), 0.f, FLinearColor::Transparent));
 		BottomBar->SetPadding(FMargin(60.f, 0.f, 24.f, 0.f));
 		BottomBar->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBox* BottomRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		UHorizontalBoxSlot* ArtifactsSlot = BottomRow->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, FText::FromString(ArtifactsLine), KeepersStyle::Body(15), KeepersStyle::Text));
+		StatusText = KeepersStyle::MakeText(WidgetTree, FText::FromString(ArtifactsLine), KeepersStyle::Body(15), KeepersStyle::Text);
+		UHorizontalBoxSlot* ArtifactsSlot = BottomRow->AddChildToHorizontalBox(StatusText);
 		ArtifactsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		ArtifactsSlot->SetVerticalAlignment(VAlign_Center);
 		BottomBar->SetContent(BottomRow);
@@ -411,6 +403,39 @@ int32 UKeepersCampaignMapWidget::NativePaint(const FPaintArgs& Args, const FGeom
 		}
 	}
 	return Layer + 1;
+}
+
+FString UKeepersCampaignMapWidget::StatusLine() const
+{
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(this);
+	if (!Campaign)
+	{
+		return FString();
+	}
+	TArray<FString> Owned;
+	for (const FName& Id : Campaign->GetArtifacts())
+	{
+		if (const FKeepersArtifact* Artifact = UKeepersCampaignSubsystem::FindArtifact(Id))
+		{
+			Owned.Add(Artifact->Name.ToString());
+		}
+	}
+	return FString::Printf(TEXT("Золото: %d   ·   "), Campaign->GetGold())
+		+ (Owned.Num() > 0 ? TEXT("Артефакты: ") + FString::Join(Owned, TEXT(", ")) : TEXT("Артефактов пока нет — их дают победы, руины и торговец на привале."));
+}
+
+void UKeepersCampaignMapWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	// Gold and artifacts change in events and at the camp without a new map.
+	if (StatusText)
+	{
+		const FString Line = StatusLine();
+		if (StatusText->GetText().ToString() != Line)
+		{
+			StatusText->SetText(FText::FromString(Line));
+		}
+	}
 }
 
 void UKeepersCampaignMapWidget::HandleMenuClicked()

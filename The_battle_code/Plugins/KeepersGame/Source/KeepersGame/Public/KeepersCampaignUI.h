@@ -80,9 +80,16 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
 	friend class UKeepersCampaignWorldSubsystem;
+
+	/** "Золото: … · Артефакты: …" for the bottom bar. */
+	FString StatusLine() const;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> StatusText;
 
 	void OnNodePicked(int32 NodeIndex);
 	void ShowArtifactChoice(const FText& Title, const FText& Subtitle, int32 Count);

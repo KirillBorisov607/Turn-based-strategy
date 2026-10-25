@@ -60,6 +60,11 @@ namespace KeepersSettings
 		{
 			if (Class)
 			{
+				// The mix keeps raw pointers to its classes: they must outlive every level change.
+				if (!Class->IsRooted())
+				{
+					Class->AddToRoot();
+				}
 				// Class volumes multiply down the hierarchy, so each class only sets its own.
 				UGameplayStatics::SetSoundMixClassOverride(WorldContext, Mix, Class, FMath::Clamp(Value, 0.f, 1.f), 1.f, 0.f, false);
 			}
