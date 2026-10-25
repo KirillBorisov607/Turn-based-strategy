@@ -9,6 +9,8 @@
 #include "Engine/Texture2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "KeepersAbilityBar.h"
+#include "KeepersUnitPanels.h"
+#include "Components/PanelWidget.h"
 #include "KeepersHeroes.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
@@ -145,6 +147,98 @@ void UKeepersBattleHudSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	KeepersSettings::ApplyVolume(&InWorld);
 }
 
+void UKeepersBattleHudSubsystem::HideBlueprintPanel(UUserWidget* Hud, const TCHAR* ClassName)
+{
+	KeepersHud::ForEachWidgetDeep(Hud, [Hud, ClassName](UWidget* Widget)
+	{
+		if (Widget->GetClass()->GetName() != ClassName)
+		{
+			return;
+		}
+		// Up to the child of the HUD's root canvas: the frame goes too.
+		UWidget* Top = Widget;
+		while (Top->GetParent() && Top->GetParent() != Hud->WidgetTree->RootWidget)
+		{
+			Top = Top->GetParent();
+		}
+		Top->SetVisibility(ESlateVisibility::Hidden);
+	});
+}
+
+void UKeepersBattleHudSubsystem::SyncUnitPanels(UObject* CombatSystem)
+{
+	UWorld* World = GetWorld();
+	APlayerController* Player = World ? World->GetFirstPlayerController() : nullptr;
+	if (!Player)
+	{
+		return;
+	}
+	if (!UnitCard)
+	{
+		UnitCard = CreateWidget<UKeepersUnitCard>(Player, UKeepersUnitCard::StaticClass());
+		UnitCard->AddToViewport(13);
+		TurnRibbon = CreateWidget<UKeepersTurnRibbon>(Player, UKeepersTurnRibbon::StaticClass());
+		TurnRibbon->AddToViewport(13);
+		HideBlueprintPanel(SkinnedHud.Get(), TEXT("W_Combat_UnitInfo_C"));
+		HideBlueprintPanel(SkinnedHud.Get(), TEXT("W_Combat_UnitsTurnBar_C"));
+	}
+	bool bInCombat = false;
+	bool bFinishing = false;
+	if (CombatSystem)
+	{
+		KeepersReflection::GetBool(CombatSystem->GetClass(), CombatSystem, TEXT("IsInCombat"), bInCombat);
+		KeepersReflection::GetBool(CombatSystem->GetClass(), CombatSystem, TEXT("IsFinishingCombat"), bFinishing);
+	}
+	UObject* Current = bInCombat && !bFinishing ? KeepersReflection::GetObject(CombatSystem, TEXT("CurrentUnit")) : nullptr;
+	if (!Current)
+	{
+		UnitCard->ShowUnit(nullptr);
+		TurnRibbon->ShowOrder({}, nullptr);
+		return;
+	}
+
+	// Turn order from the current unit on; the dead are gone.
+	TArray<UObject*> Units;
+	FArrayProperty* Property = CastField<FArrayProperty>(KeepersReflection::FindMember(CombatSystem->GetClass(), TEXT("UnitsInCombat")));
+	FObjectPropertyBase* Inner = Property ? CastField<FObjectPropertyBase>(Property->Inner) : nullptr;
+	if (Inner)
+	{
+		FScriptArrayHelper Helper(Property, Property->ContainerPtrToValuePtr<void>(CombatSystem));
+		for (int32 I = 0; I < Helper.Num(); ++I)
+		{
+			UObject* Unit = Inner->GetObjectPropertyValue(Helper.GetRawPtr(I));
+			if (Unit && KeepersUnits::Stat(Unit, TEXT("HP_Current")) > 0)
+			{
+				Units.Add(Unit);
+			}
+		}
+	}
+	const int32 CurrentIndex = Units.IndexOfByKey(Current);
+	TArray<UObject*> Order;
+	for (int32 I = 0; I < Units.Num(); ++I)
+	{
+		Order.Add(Units[(FMath::Max(CurrentIndex, 0) + I) % Units.Num()]);
+	}
+	TurnRibbon->ShowOrder(Order, Current);
+
+	// The card: the unit under the cursor, otherwise the one whose turn it is.
+	UObject* Hovered = nullptr;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		if (It->GetClass()->GetName() == TEXT("BP_PlayerActions_C"))
+		{
+			KeepersReflection::FCall Under(*It, TEXT("GetUnitUnderCursor"));
+			Under.Set<int32>(TEXT("PlayerIndex"), 0);
+			if (Under.Call())
+			{
+				Under.Get<UObject*>(TEXT("Unit"), Hovered);
+			}
+			break;
+		}
+	}
+	UnitCard->ShowUnit(Hovered && KeepersUnits::Stat(Hovered, TEXT("HP_Current")) > 0 ? Hovered : Current);
+}
+
 void UKeepersBattleHudSubsystem::TestAbility(const UObject* WorldContextObject, int32 Index)
 {
 	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
@@ -210,6 +304,7 @@ void UKeepersBattleHudSubsystem::Tick(float DeltaTime)
 		{
 			AbilityBar->Sync(SkinnedHud.Get());
 		}
+		SyncUnitPanels(KeepersHud::FindCombatSystem(World));
 	}
 
 	RefreshTimer -= DeltaTime;

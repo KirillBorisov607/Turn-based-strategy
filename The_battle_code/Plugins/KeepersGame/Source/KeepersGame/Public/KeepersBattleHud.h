@@ -67,6 +67,9 @@ private:
 
 	static void SoftenTeamColor(class UProgressBar* Bar);
 
+	/** Hides a Blueprint panel of the HUD with the frame around it. */
+	static void HideBlueprintPanel(UUserWidget* Hud, const TCHAR* ClassName);
+
 	TWeakObjectPtr<UUserWidget> SkinnedHud;
 	float RefreshTimer = 0.f;
 
@@ -79,6 +82,15 @@ private:
 	/** Big ability buttons with tooltips over the Blueprint spell list. */
 	UPROPERTY()
 	TObjectPtr<class UKeepersAbilityBar> AbilityBar;
+
+	/** Unit card (bottom left) and turn order (top) in place of the Blueprint ones. */
+	UPROPERTY()
+	TObjectPtr<class UKeepersUnitCard> UnitCard;
+
+	UPROPERTY()
+	TObjectPtr<class UKeepersTurnRibbon> TurnRibbon;
+
+	void SyncUnitPanels(UObject* CombatSystem);
 
 	float AbilityTimer = 0.f;
 
