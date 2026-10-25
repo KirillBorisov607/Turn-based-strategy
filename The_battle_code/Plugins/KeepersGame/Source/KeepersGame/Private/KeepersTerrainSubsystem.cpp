@@ -4,6 +4,7 @@
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "KeepersReflection.h"
+#include "KeepersBarks.h"
 #include "KeepersPlantActor.h"
 #include "KeepersRockActor.h"
 #include "TimerManager.h"
@@ -207,13 +208,19 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 	switch (Effect)
 	{
 	case EKeepersTerrainEffect::RaiseRock:
-		RaiseRock(Grid, Target);
+		if (RaiseRock(Grid, Target))
+		{
+			UKeepersBarkLibrary::BarkAbout(Cast<AActor>(KeepersTerrain::GetUnitOnTile(Grid, Origin)), EKeepersBarkSituation::RaisesRock, 0.8f);
+		}
 		break;
 	case EKeepersTerrainEffect::Push:
 		PushUnit(KeepersTerrain::FindCombatSystem(GetWorld()), Origin, Target);
 		break;
 	case EKeepersTerrainEffect::Sprout:
-		GrowForest(Grid, Target);
+		if (GrowForest(Grid, Target))
+		{
+			UKeepersBarkLibrary::BarkAbout(Cast<AActor>(KeepersTerrain::GetUnitOnTile(Grid, Origin)), EKeepersBarkSituation::GrowsForest, 0.6f);
+		}
 		break;
 	}
 }
@@ -370,6 +377,7 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	if (!Destination.IsSet())
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s hits the edge"), *Unit->GetName());
+		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Bumped);
 		DamageUnit(CombatSystem, Unit, KeepersTerrain::BumpDamage);
 		return true;
 	}
@@ -379,6 +387,7 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	if (UObject* Blocker = KeepersTerrain::GetUnitOnTile(Grid, Destination.GetValue()))
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s bumps into %s"), *Unit->GetName(), *Blocker->GetName());
+		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Bumped);
 		DamageUnit(CombatSystem, Unit, KeepersTerrain::BumpDamage);
 		DamageUnit(CombatSystem, Blocker, KeepersTerrain::BumpDamage);
 		return true;
@@ -386,6 +395,7 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	if (DestinationType == KeepersTerrain::ObstacleTileType)
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s hits a rock"), *Unit->GetName());
+		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Bumped);
 		DamageUnit(CombatSystem, Unit, KeepersTerrain::BumpDamage);
 		return true;
 	}
@@ -400,11 +410,13 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	if (!KeepersTerrain::CanStandOn(Unit, DestinationType))
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s falls"), *Unit->GetName());
+		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Falls);
 		DamageUnit(CombatSystem, Unit, 9999);
 	}
 	else
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s to (%d,%d)"), *Unit->GetName(), Destination->X, Destination->Y);
+		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Pushed, 0.7f);
 	}
 	return true;
 }

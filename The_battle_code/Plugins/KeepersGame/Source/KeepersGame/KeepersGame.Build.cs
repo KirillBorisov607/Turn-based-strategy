@@ -10,7 +10,10 @@ public class KeepersGame : ModuleRules
 		{
 			"Core",
 			"CoreUObject",
-			"Engine"
+			"Engine",
+			"UMG",
+			"Slate",
+			"SlateCore"
 		});
 	}
 }

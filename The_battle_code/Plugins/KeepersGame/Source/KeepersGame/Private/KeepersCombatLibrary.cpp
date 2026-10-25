@@ -2,6 +2,7 @@
 
 #include "Algo/StableSort.h"
 #include "Engine/World.h"
+#include "KeepersBarks.h"
 #include "KeepersIntentSubsystem.h"
 #include "KeepersReflection.h"
 
@@ -177,6 +178,7 @@ void UKeepersCombatLibrary::SaveIntent(UObject* UnitAi)
 	UE_LOG(LogKeepersCombat, Log, TEXT("%s plans spell %d at (%d,%d), %d tiles, %d marked"), *UnitAi->GetName(), Spell, TargetIndex.X, TargetIndex.Y,
 		Intent.AttackedIndexes.Num(), Intent.AttackedLocations.Num());
 	Intents->SetIntent(UnitAi, MoveTemp(Intent));
+	UKeepersBarkLibrary::BarkAbout(Cast<AActor>(KeepersReflection::GetObject(UnitAi, TEXT("Unit"))), EKeepersBarkSituation::PlansAttack, 0.35f);
 }
 
 bool UKeepersCombatLibrary::RestoreIntent(UObject* UnitAi)
