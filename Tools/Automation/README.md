@@ -28,6 +28,7 @@
 
 | `record.sh <карта> <имя> <сек> "<шаги>"` | Запись ролика в отдельном окне игры через `KeepersDirector`: кадры 30 к/с с интерфейсом в `_logs/rec/<имя>`. Шаги: `0.2:autoplay;0.2:follow;0.2:speed=2.5`, `1:squad;3:squadhero=Warrior,0`, `4.5:newcampaign`, `orbit`, `view=x,y,z,pitch,yaw,fov` (полный список — в `KeepersDirector.h`) |
 | `make_trailer.py [out.mp4]` | Склейка трейлера из записанных клипов: титры, подписи, переходы (OpenCV + PIL) |
+| `to_h264.ps1 -In a.mp4 -Out b.mp4 [-Kbps 3000]` | Перекодирование в H.264 встроенным кодировщиком Windows (OpenCV пишет только MPEG-4 part 2) |
 | `edit_ai_score.py` | Правка `BP_UnitAi`: оценка удара идёт через `KeepersAiLibrary.AdjustPlanScore` (тактика врагов) |
 | `kit_test.py`, `kit_check.py` | Конструктор уровней: создать уровень боя из шаблона и проверить его |
 

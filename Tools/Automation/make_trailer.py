@@ -72,11 +72,11 @@ def caption(frame, text, alpha):
 
 # (clip, first frame, last frame, step, caption)
 CUTS = [
-    ("menu", 20, 200, 1, "Привал у костра"),
-    ("squad", 20, 380, 1, "Собери отряд"),
-    ("campaign", 60, 470, 1, "Выбери путь по карте"),
-    ("battle", 120, 900, 1, "Перехитри врага: он показывает, куда ударит"),
-    ("battle2", 60, 600, 1, "Используй местность"),
+    ("menu", 20, 170, 1, "Привал у костра"),
+    ("squad", 30, 385, 1, "Собери отряд"),
+    ("campaign", 30, 450, 1, "Выбери путь по карте"),
+    ("battle", 540, 1340, 1, "Враг показывает, куда ударит"),
+    ("battle2", 90, 600, 1, "Используй местность"),
 ]
 
 
@@ -98,12 +98,13 @@ def main(out):
     shots.append(card([("Альфа-тест", font(64, True), GOLD), ("дипломный проект · Unreal Engine 5.8", font(30), CREAM),
                        ("октябрь 2026", font(26), CREAM)], None, 3.5))
 
-    writer = None
-    for codec in ("avc1", "mp4v"):
-        writer = cv2.VideoWriter(out, cv2.VideoWriter_fourcc(*codec), FPS, (W, H))
-        if writer.isOpened():
-            print("codec", codec)
-            break
+    # H.264 through Windows Media Foundation plays everywhere, phones too; MPEG-4 part 2 is the fallback.
+    writer = cv2.VideoWriter(out, cv2.CAP_MSMF, cv2.VideoWriter_fourcc(*"H264"), FPS, (W, H))
+    if writer.isOpened():
+        print("codec H264 (Media Foundation)")
+    else:
+        writer = cv2.VideoWriter(out, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (W, H))
+        print("codec mp4v")
     previous_tail = None
     for shot in shots:
         if previous_tail is not None:
