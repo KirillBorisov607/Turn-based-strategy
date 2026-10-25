@@ -84,7 +84,7 @@ void UKeepersPauseWidget::ShowMain()
 	List->ClearChildren();
 	Title->SetText(KeepersPause::T(TEXT("Пауза")));
 	const bool bCampaign = UKeepersCampaignSubsystem::Get(this) && UKeepersCampaignSubsystem::Get(this)->IsActive();
-	Note->SetText(KeepersPause::T(bCampaign ? TEXT("Кампания сохраняется после каждого пройденного узла.") : TEXT("Esc — вернуться в игру.")));
+	Note->SetText(KeepersPause::T(bCampaign ? TEXT("Кампания сохраняется после каждого пройденного узла.") : TEXT("P или Esc — вернуться в игру.")));
 
 	TWeakObjectPtr<UKeepersPauseWidget> WeakThis(this);
 	auto Add = [this](const TCHAR* Label, UKeepersFnButton::EKind Kind, TFunction<void()> OnClicked)
@@ -148,7 +148,8 @@ void UKeepersPauseWidget::Quit()
 
 FReply UKeepersPauseWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	const FKey Key = InKeyEvent.GetKey();
+	if (Key == EKeys::Escape || Key == EKeys::P || Key == EKeys::F10)
 	{
 		if (bSettings)
 		{
@@ -179,11 +180,25 @@ void UKeepersPauseSubsystem::Tick(float DeltaTime)
 {
 	UWorld* World = GetWorld();
 	APlayerController* Player = World ? World->GetFirstPlayerController() : nullptr;
-	if (!Player || Widget)
+	if (!Player || !World->HasBegunPlay())
 	{
 		return;
 	}
-	if (Player->WasInputKeyJustPressed(EKeys::Escape))
+	// A visible "Меню" button: in the editor Esc stops Play, so the keys alone are not enough.
+	if (!Button && !TActorIterator<AKeepersMenuScene>(World))
+	{
+		Button = CreateWidget<UKeepersFnButton>(Player, UKeepersFnButton::StaticClass());
+		TWeakObjectPtr<UKeepersPauseSubsystem> WeakThis(this);
+		Button->Setup(FText::FromString(TEXT("Меню · P")), UKeepersFnButton::EKind::Secondary, 18, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->TogglePause(); } }, 150.f);
+		Button->AddToViewport(40);
+		Button->SetAlignmentInViewport(FVector2D(0.f, 0.f));
+		Button->SetPositionInViewport(FVector2D(20.f, 20.f), false);
+	}
+	if (Widget)
+	{
+		return;
+	}
+	if (Player->WasInputKeyJustPressed(EKeys::Escape) || Player->WasInputKeyJustPressed(EKeys::P) || Player->WasInputKeyJustPressed(EKeys::F10))
 	{
 		TogglePause();
 	}

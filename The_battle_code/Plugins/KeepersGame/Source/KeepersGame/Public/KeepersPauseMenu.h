@@ -70,4 +70,8 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UKeepersPauseWidget> Widget;
+
+	/** The "Меню" button in the corner. */
+	UPROPERTY()
+	TObjectPtr<UKeepersFnButton> Button;
 };
