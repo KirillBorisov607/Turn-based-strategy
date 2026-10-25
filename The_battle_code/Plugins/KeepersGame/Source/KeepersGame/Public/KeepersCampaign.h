@@ -77,6 +77,26 @@ public:
 
 	UPROPERTY(SaveGame)
 	TArray<FName> Artifacts;
+
+	/** Gold of the run: battles and ruins bring it, the camp's smith and merchant take it. */
+	UPROPERTY(SaveGame)
+	int32 Gold = 30;
+
+	/** Gear ranks bought at the smith, per hero ("Warrior" -> rank). */
+	UPROPERTY(SaveGame)
+	TMap<FName, int32> ArmorRanks;
+
+	UPROPERTY(SaveGame)
+	TMap<FName, int32> BootsRanks;
+};
+
+/** Gear the camp's smith improves. */
+enum class EKeepersGear : uint8
+{
+	/** +HP per rank. */
+	Armor,
+	/** +1 movement point per rank. */
+	Boots
 };
 
 /**
@@ -137,6 +157,27 @@ public:
 	static const FKeepersArtifact* FindArtifact(FName Id);
 	/** Up to Count random artifacts the player does not have yet. */
 	TArray<FName> RollArtifacts(int32 Count) const;
+
+	/** Gold of the run. */
+	int32 GetGold() const { return Save ? Save->Gold : 0; }
+	void AddGold(int32 Amount);
+	/** Spends gold; false when there is not enough. */
+	bool SpendGold(int32 Amount);
+
+	/** Gear of a hero in this run. */
+	int32 GetGearRank(FName Hero, EKeepersGear Gear) const;
+	static int32 MaxGearRank(EKeepersGear Gear) { return Gear == EKeepersGear::Armor ? 3 : 2; }
+	/** Price of the next rank. */
+	static int32 GearCost(EKeepersGear Gear, int32 NextRank) { return Gear == EKeepersGear::Armor ? 25 * NextRank : 40 * NextRank; }
+	static int32 ArmorHpPerRank() { return 6; }
+	/** Buys the next rank; false when maxed or too poor. */
+	bool UpgradeGear(FName Hero, EKeepersGear Gear);
+
+	/** Price of an artifact at the camp's merchant. */
+	static int32 ArtifactPrice() { return 45; }
+
+	/** Gold a battle node brings. */
+	static int32 GoldFor(EKeepersNodeType Type);
 
 	/** Node finished: marks it visited, saves and returns to the map (or ends the run after the boss). */
 	void CompleteCurrentNode();

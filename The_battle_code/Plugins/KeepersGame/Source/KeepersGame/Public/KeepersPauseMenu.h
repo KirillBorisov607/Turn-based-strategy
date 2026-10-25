@@ -18,6 +18,9 @@ class KEEPERSGAME_API UKeepersPauseWidget : public UUserWidget
 public:
 	TFunction<void()> OnClose;
 
+	void AskQuit() { Quit(); }
+	void AskMainMenu() { ToMainMenu(); }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
@@ -79,6 +82,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Keepers")
 	void TogglePause();
+
+	/** Test hook: opens the pause menu with the quit (or main menu) question. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers", meta = (WorldContext = "WorldContextObject"))
+	static void TestQuestion(const UObject* WorldContextObject, bool bQuit);
 
 	/** Opens or closes the pause menu of the world (for scripts and tests). */
 	UFUNCTION(BlueprintCallable, Category = "Keepers", meta = (WorldContext = "WorldContextObject"))

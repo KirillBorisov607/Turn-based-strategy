@@ -269,7 +269,8 @@ void UKeepersPauseSubsystem::Tick(float DeltaTime)
 		return;
 	}
 	// A visible "Меню" button: in the editor Esc stops Play, so the keys alone are not enough.
-	if (!Button && !TActorIterator<AKeepersMenuScene>(World))
+	// The campaign map has its own "В меню" button and its title in this corner.
+	if (!Button && !TActorIterator<AKeepersMenuScene>(World) && !World->GetMapName().Contains(TEXT("CampaignMap")))
 	{
 		Button = CreateWidget<UKeepersFnButton>(Player, UKeepersFnButton::StaticClass());
 		TWeakObjectPtr<UKeepersPauseSubsystem> WeakThis(this);
@@ -317,6 +318,24 @@ void UKeepersPauseSubsystem::TogglePause()
 	Mode.SetHideCursorDuringCapture(false);
 	Mode.SetWidgetToFocus(Widget->TakeWidget());
 	Player->SetInputMode(Mode);
+}
+
+void UKeepersPauseSubsystem::TestQuestion(const UObject* WorldContextObject, bool bQuit)
+{
+	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
+	UKeepersPauseSubsystem* Pause = World ? World->GetSubsystem<UKeepersPauseSubsystem>() : nullptr;
+	if (!Pause)
+	{
+		return;
+	}
+	if (!Pause->Widget)
+	{
+		Pause->TogglePause();
+	}
+	if (Pause->Widget)
+	{
+		bQuit ? Pause->Widget->AskQuit() : Pause->Widget->AskMainMenu();
+	}
 }
 
 void UKeepersPauseSubsystem::TogglePauseMenu(const UObject* WorldContextObject)

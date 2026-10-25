@@ -105,6 +105,13 @@ public:
 	/** Shows a modal choice and gives the mouse to the UI. */
 	UKeepersChoiceWidget* ShowChoice(const FText& Title, const FText& Subtitle, TArray<UKeepersChoiceWidget::FOption> Options);
 
+	/** The camp node: smith, merchant, rest. */
+	void ShowCamp();
+
+	/** Test hook: "open" the camp, "armor" / "boots" for squad member Index, "buy" offer Index, "leave". */
+	UFUNCTION(BlueprintCallable, Category = "Keepers", meta = (WorldContext = "WorldContextObject"))
+	static void TestCamp(const UObject* WorldContextObject, const FString& Action, int32 Index);
+
 private:
 	void ShowMap();
 	void TickBattle();
@@ -120,6 +127,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> Screen;
+
+	UPROPERTY()
+	TObjectPtr<class UKeepersCampWidget> Camp;
 
 	bool bMapShown = false;
 	bool bArtifactsApplied = false;

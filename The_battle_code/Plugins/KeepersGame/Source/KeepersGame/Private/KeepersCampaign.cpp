@@ -291,6 +291,58 @@ TArray<FName> UKeepersCampaignSubsystem::RollArtifacts(int32 Count) const
 	return Result;
 }
 
+void UKeepersCampaignSubsystem::AddGold(int32 Amount)
+{
+	if (Save)
+	{
+		Save->Gold = FMath::Max(Save->Gold + Amount, 0);
+	}
+}
+
+bool UKeepersCampaignSubsystem::SpendGold(int32 Amount)
+{
+	if (!Save || Save->Gold < Amount)
+	{
+		return false;
+	}
+	Save->Gold -= Amount;
+	WriteSave();
+	return true;
+}
+
+int32 UKeepersCampaignSubsystem::GetGearRank(FName Hero, EKeepersGear Gear) const
+{
+	if (!Save)
+	{
+		return 0;
+	}
+	const int32* Rank = (Gear == EKeepersGear::Armor ? Save->ArmorRanks : Save->BootsRanks).Find(Hero);
+	return Rank ? *Rank : 0;
+}
+
+bool UKeepersCampaignSubsystem::UpgradeGear(FName Hero, EKeepersGear Gear)
+{
+	const int32 Next = GetGearRank(Hero, Gear) + 1;
+	if (!Save || Next > MaxGearRank(Gear) || !SpendGold(GearCost(Gear, Next)))
+	{
+		return false;
+	}
+	(Gear == EKeepersGear::Armor ? Save->ArmorRanks : Save->BootsRanks).Add(Hero, Next);
+	WriteSave();
+	return true;
+}
+
+int32 UKeepersCampaignSubsystem::GoldFor(EKeepersNodeType Type)
+{
+	switch (Type)
+	{
+	case EKeepersNodeType::Battle: return 25;
+	case EKeepersNodeType::Elite: return 40;
+	case EKeepersNodeType::Ruins: return 15;
+	default: return 0;
+	}
+}
+
 void UKeepersCampaignSubsystem::CompleteCurrentNode()
 {
 	if (!Save->Nodes.IsValidIndex(Save->CurrentNode))
@@ -298,6 +350,7 @@ void UKeepersCampaignSubsystem::CompleteCurrentNode()
 		return;
 	}
 	Save->VisitedNodes.AddUnique(Save->CurrentNode);
+	AddGold(GoldFor(Save->Nodes[Save->CurrentNode].Type));
 	// Glory for every won battle: more for elites and the boss.
 	if (UKeepersPartySubsystem* Party = GetGameInstance()->GetSubsystem<UKeepersPartySubsystem>())
 	{

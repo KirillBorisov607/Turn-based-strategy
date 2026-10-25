@@ -17,7 +17,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "KeepersBarks.h"
 #include "KeepersBattleObjective.h"
+#include "KeepersCamp.h"
 #include "KeepersCampaign.h"
+#include "KeepersHeroes.h"
 #include "KeepersCreatureSubsystem.h"
 #include "KeepersReflection.h"
 #include "KeepersStyle.h"
@@ -342,7 +344,8 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 				Owned.Add(Artifact->Name.ToString());
 			}
 		}
-		const FString ArtifactsLine = Owned.Num() > 0 ? TEXT("Артефакты: ") + FString::Join(Owned, TEXT(", ")) : TEXT("Артефактов пока нет — их дают победы и руины.");
+		const FString ArtifactsLine = FString::Printf(TEXT("Золото: %d   ·   "), Campaign->GetGold())
+			+ (Owned.Num() > 0 ? TEXT("Артефакты: ") + FString::Join(Owned, TEXT(", ")) : TEXT("Артефактов пока нет — их дают победы, руины и торговец на привале."));
 		// Bottom bar: artifacts on the left, back to the menu on the right.
 		UBorder* BottomBar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		BottomBar->SetBrush(KeepersStyle::Panel(FLinearColor(0.f, 0.f, 0.f, 0.6f), 0.f, FLinearColor::Transparent));
@@ -418,8 +421,10 @@ void UKeepersCampaignMapWidget::OnNodePicked(int32 NodeIndex)
 	}
 	else if (Type == EKeepersNodeType::Camp)
 	{
-		ShowArtifactChoice(FText::FromString(TEXT("Привал у костра")),
-			FText::FromString(TEXT("Друид заваривает чай из подозрительных грибов. Страж делится историей про кур. Утром кто-то находит в рюкзаке подарок.")), 2);
+		if (UKeepersCampaignWorldSubsystem* World = GetWorld() ? GetWorld()->GetSubsystem<UKeepersCampaignWorldSubsystem>() : nullptr)
+		{
+			World->ShowCamp();
+		}
 	}
 }
 
@@ -485,6 +490,56 @@ void UKeepersCampaignWorldSubsystem::SetUiInput(UUserWidget* Focus)
 			Mode.SetWidgetToFocus(Focus->TakeWidget());
 		}
 		Player->SetInputMode(Mode);
+	}
+}
+
+void UKeepersCampaignWorldSubsystem::ShowCamp()
+{
+	APlayerController* Player = GetWorld()->GetFirstPlayerController();
+	if (!Player || Camp)
+	{
+		return;
+	}
+	Camp = CreateWidget<UKeepersCampWidget>(Player, UKeepersCampWidget::StaticClass());
+	TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakThis(this);
+	Camp->OnLeave = [WeakThis]()
+	{
+		if (!WeakThis.IsValid())
+		{
+			return;
+		}
+		if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis->GetWorld()))
+		{
+			Campaign->CompleteCurrentNode();
+		}
+	};
+	Camp->AddToViewport(50);
+	SetUiInput(Camp);
+}
+
+void UKeepersCampaignWorldSubsystem::TestCamp(const UObject* WorldContextObject, const FString& Action, int32 Index)
+{
+	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
+	UKeepersCampaignWorldSubsystem* Self = World ? World->GetSubsystem<UKeepersCampaignWorldSubsystem>() : nullptr;
+	if (!Self)
+	{
+		return;
+	}
+	if (Action == TEXT("open"))
+	{
+		Self->ShowCamp();
+	}
+	else if (Self->Camp && (Action == TEXT("armor") || Action == TEXT("boots")))
+	{
+		Self->Camp->TestUpgrade(Index, Action == TEXT("boots"));
+	}
+	else if (Self->Camp && Action == TEXT("buy"))
+	{
+		Self->Camp->TestBuy(Index);
+	}
+	else if (Self->Camp && Action == TEXT("leave") && Self->Camp->OnLeave)
+	{
+		Self->Camp->OnLeave();
 	}
 }
 
@@ -668,6 +723,25 @@ void UKeepersCampaignWorldSubsystem::ApplyArtifactsAtBattleStart(UObject* Combat
 	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
 	for (UObject* Hero : KeepersUI::Heroes(CombatSystem))
 	{
+		// Gear from the camp's smith.
+		if (const FKeepersHeroDef* Def = KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Hero)))
+		{
+			const int32 ArmorHp = Campaign->GetGearRank(Def->Id, EKeepersGear::Armor) * UKeepersCampaignSubsystem::ArmorHpPerRank();
+			if (ArmorHp > 0)
+			{
+				KeepersReflection::AddUnitStat(Hero, TEXT("HP_Max"), ArmorHp);
+				KeepersReflection::FCall Heal(Hero, TEXT("ModifyCurrentHp"));
+				Heal.Set<int32>(TEXT("Modifier"), ArmorHp);
+				Heal.Set<bool>(TEXT("ShowNumber"), false);
+				Heal.Call();
+			}
+			const int32 Boots = Campaign->GetGearRank(Def->Id, EKeepersGear::Boots);
+			if (Boots > 0)
+			{
+				KeepersReflection::AddUnitStat(Hero, TEXT("MP_Max"), Boots);
+				KeepersReflection::AddUnitStat(Hero, TEXT("MP_Current"), Boots);
+			}
+		}
 		if (Campaign->HasArtifact(TEXT("RangerBoots")))
 		{
 			KeepersReflection::AddUnitStat(Hero, TEXT("MP_Max"), 1);
@@ -765,5 +839,6 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 		Next.OnPicked = [WeakCampaign]() { if (WeakCampaign.IsValid()) { WeakCampaign->CompleteCurrentNode(); } };
 		Options.Add(MoveTemp(Next));
 	}
-	ShowChoice(FText::FromString(TEXT("Победа!")), FText::FromString(TEXT("Выберите награду.")), MoveTemp(Options));
+	const int32 Gold = UKeepersCampaignSubsystem::GoldFor(Campaign->GetNodes()[Campaign->GetCurrentNode()].Type);
+	ShowChoice(FText::FromString(TEXT("Победа!")), FText::FromString(FString::Printf(TEXT("Добыча: %d золота. Выберите награду."), Gold)), MoveTemp(Options));
 }
