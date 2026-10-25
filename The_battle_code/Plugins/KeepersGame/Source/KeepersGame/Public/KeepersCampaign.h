@@ -183,6 +183,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Campaign", meta = (WorldContext = "WorldContextObject"))
 	static void SetMercenaryBattle(const UObject* WorldContextObject, bool bEnabled);
 
+	/** Before a generated battle: the node's seed and biome for the generator. */
+	void PrepareGeneratedField(int32 NodeIndex) const;
+
 	/** Gold a battle node brings. */
 	static int32 GoldFor(EKeepersNodeType Type);
 

@@ -223,6 +223,11 @@ void UKeepersBattleScenerySubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Super::OnWorldBeginPlay(InWorld);
 
 	// Battle levels are the ones with a grid; the campaign map shows the same island.
+	// Generated fields call SurroundField themselves once the island is laid out.
+	if (InWorld.GetMapName().Contains(TEXT("L_Generated")))
+	{
+		return;
+	}
 	bool bField = InWorld.GetMapName().Contains(TEXT("CampaignMap"));
 	for (TActorIterator<AActor> It(&InWorld); It && !bField; ++It)
 	{

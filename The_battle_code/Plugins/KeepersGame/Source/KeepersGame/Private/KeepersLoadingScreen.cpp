@@ -5,6 +5,7 @@
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "KeepersMapGenerator.h"
 #include "KeepersStyle.h"
 #include "MoviePlayer.h"
 #include "Styling/CoreStyle.h"
@@ -154,7 +155,18 @@ void UKeepersLoadingSubsystem::Deinitialize()
 
 TSharedRef<SWidget> UKeepersLoadingSubsystem::BuildWidget(FName Level)
 {
-	const KeepersLoading::FPlace& Place = KeepersLoading::FindPlace(Level);
+	KeepersLoading::FPlace Place = KeepersLoading::FindPlace(Level);
+	// A generated field is named after its biome.
+	static FString GeneratedTitle;
+	static FString GeneratedSubtitle;
+	EKeepersBiome Biome;
+	if (Level.ToString().Contains(TEXT("L_Generated")))
+	{
+		const bool bKnown = UKeepersMapGenerator::GetPendingBiome(Biome);
+		GeneratedTitle = bKnown ? UKeepersMapGenerator::BiomeName(Biome).ToString() : FString(TEXT("Неизведанная земля"));
+		GeneratedSubtitle = bKnown ? UKeepersMapGenerator::BiomeBlurb(Biome).ToString() : FString(TEXT("Никто ещё не видел этих мест."));
+		Place = { TEXT("L_Generated"), TEXT("неизведанная земля"), *GeneratedTitle, *GeneratedSubtitle };
+	}
 	const TCHAR* Tip = KeepersLoading::Tips[TipIndex % UE_ARRAY_COUNT(KeepersLoading::Tips)];
 
 	// Picture of the place: T_Load_<level>, or the common one.

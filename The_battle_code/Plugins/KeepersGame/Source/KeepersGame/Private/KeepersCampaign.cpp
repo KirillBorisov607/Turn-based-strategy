@@ -1,5 +1,6 @@
 ﻿#include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersMapGenerator.h"
 #include "KeepersLoadingScreen.h"
 
 #include "Engine/GameInstance.h"
@@ -145,7 +146,9 @@ void UKeepersCampaignSubsystem::GenerateMap(int32 Seed)
 			switch (Node.Type)
 			{
 			case EKeepersNodeType::Battle:
-				Node.Level = KeepersCampaign::BattleLevels[Random.RandRange(0, KeepersCampaign::BattleLevels.Num() - 1)];
+				// Most battles are on a new, generated field; some on the hand-made ones.
+				Node.Level = Random.FRand() < 0.7f ? UKeepersMapGenerator::Level
+					: KeepersCampaign::BattleLevels[Random.RandRange(0, KeepersCampaign::BattleLevels.Num() - 1)];
 				break;
 			case EKeepersNodeType::Elite:
 				Node.Level = KeepersCampaign::EliteLevels[Random.RandRange(0, KeepersCampaign::EliteLevels.Num() - 1)];
@@ -250,6 +253,7 @@ void UKeepersCampaignSubsystem::EnterNode(int32 NodeIndex)
 	UE_LOG(LogKeepersCampaign, Log, TEXT("Enter node %d (%s)"), NodeIndex, *StaticEnum<EKeepersNodeType>()->GetNameStringByValue(static_cast<int64>(Node.Type)));
 	if (!Node.Level.IsNone())
 	{
+		PrepareGeneratedField(NodeIndex);
 		OpenLevel(Node.Level);
 	}
 	// Ruins and camps are resolved on the map screen (see UKeepersCampaignMapWidget).
@@ -289,6 +293,18 @@ TArray<FName> UKeepersCampaignSubsystem::RollArtifacts(int32 Count) const
 		Pool.Remove(Result.Last());
 	}
 	return Result;
+}
+
+void UKeepersCampaignSubsystem::PrepareGeneratedField(int32 NodeIndex) const
+{
+	if (!Save->Nodes.IsValidIndex(NodeIndex) || Save->Nodes[NodeIndex].Level != UKeepersMapGenerator::Level)
+	{
+		return;
+	}
+	// The same node always gives the same field (a retry replays it); the Green Dales are meadows and woods.
+	const int32 FieldSeed = Save->Seed * 31 + NodeIndex * 977 + 1;
+	const EKeepersBiome Biome = (FieldSeed / 7) % 5 < 3 ? EKeepersBiome::Meadow : EKeepersBiome::Forest;
+	UKeepersMapGenerator::SetNextMap(FieldSeed, Biome);
 }
 
 void UKeepersCampaignSubsystem::AddGold(int32 Amount)
@@ -414,6 +430,7 @@ void UKeepersCampaignSubsystem::RetryCurrentNode()
 {
 	if (Save->Nodes.IsValidIndex(Save->CurrentNode) && !Save->Nodes[Save->CurrentNode].Level.IsNone())
 	{
+		PrepareGeneratedField(Save->CurrentNode);
 		OpenLevel(Save->Nodes[Save->CurrentNode].Level);
 	}
 }
