@@ -5,6 +5,7 @@
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
 #include "KeepersStyle.h"
 #include "MoviePlayer.h"
@@ -167,10 +168,21 @@ TSharedRef<SWidget> UKeepersLoadingSubsystem::BuildWidget(FName Level)
 		GeneratedSubtitle = bKnown ? UKeepersMapGenerator::BiomeBlurb(Biome).ToString() : FString(TEXT("Никто ещё не видел этих мест."));
 		Place = { TEXT("L_Generated"), TEXT("неизведанная земля"), *GeneratedTitle, *GeneratedSubtitle };
 	}
+	// A level of the level kit: its row names it.
+	static FString KitLevel;
+	const FKeepersLevelRow* KitRow = KeepersLevelKit::FindRow(Level);
+	if (KitRow)
+	{
+		KitLevel = FPackageName::GetShortName(KitRow->Level.ToSoftObjectPath().GetLongPackageName());
+		GeneratedTitle = KitRow->Title.IsEmpty() ? KitLevel : KitRow->Title.ToString();
+		GeneratedSubtitle = KitRow->Subtitle.ToString();
+		Place = { *KitLevel, KitRow->Kind == EKeepersLevelKind::Elite ? TEXT("опасный бой") : TEXT("бой"), *GeneratedTitle, *GeneratedSubtitle };
+	}
 	const TCHAR* Tip = KeepersLoading::Tips[TipIndex % UE_ARRAY_COUNT(KeepersLoading::Tips)];
 
 	// Picture of the place: T_Load_<level>, or the common one.
-	Background = LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/Keepers/Loading/T_Load_%s.T_Load_%s"), Place.Level, Place.Level));
+	Background = KitRow && !KitRow->LoadingImage.IsNull() ? KitRow->LoadingImage.LoadSynchronous()
+		: LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/Keepers/Loading/T_Load_%s.T_Load_%s"), Place.Level, Place.Level), nullptr, LOAD_NoWarn | LOAD_Quiet);
 	if (!Background)
 	{
 		Background = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Keepers/Loading/T_Load_Default.T_Load_Default"));

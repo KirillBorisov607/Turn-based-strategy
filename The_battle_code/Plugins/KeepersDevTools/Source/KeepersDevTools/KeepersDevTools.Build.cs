@@ -20,7 +20,9 @@ public class KeepersDevTools : ModuleRules
 			"SlateCore",
 			"InputCore",
 			"UMG",
-			"RenderCore"
+			"RenderCore",
+			"ToolMenus",
+			"KeepersGame"
 		});
 	}
 }

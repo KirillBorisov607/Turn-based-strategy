@@ -39,6 +39,7 @@
 #include "KeepersBattleScenery.h"
 #include "KeepersHeroes.h"
 #include "KeepersLoadingScreen.h"
+#include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
 #include "KeepersRockActor.h"
 #include "KeepersPlantActor.h"
@@ -68,7 +69,6 @@ namespace KeepersMenu
 
 	static const FQuickBattle QuickBattles[] =
 	{
-		{ TEXT("/Game/Maps/Generated/L_Generated"), TEXT("Неизведанная земля"), TEXT("Каждый раз новое поле: луга, лес, болота, горы, зима или проклятые земли. Никто не знает, что там.") },
 		{ TEXT("L_Slice_Hex"), TEXT("Наёмники кур"), TEXT("Куры наняли людей: разбойники, стрелки и громила вместе со слизнями. Держите строй.") },
 		{ TEXT("L_Combat_FairDuel"), TEXT("Честная дуэль"), TEXT("Три Хранителя против трёх таких же. Кто лучше использует местность?") },
 		{ TEXT("L_Combat_SoSlimy"), TEXT("Слишком скользко"), TEXT("Слизни оставляют лужи и делятся надвое. Не дайте им заполнить поле.") },
@@ -488,10 +488,26 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 					{
 						Campaign->bMercenaryQuickBattle = bMercenaries;
 					}
-					// A new land: decide seed and biome now, so the loading screen can name the place.
-					if (Level == UKeepersMapGenerator::Level)
+					WeakThis->Leave([WeakThis, Level]() { if (WeakThis.IsValid()) { KeepersLoading::OpenLevel(WeakThis.Get(), Level); } });
+				}
+			});
+		}
+		// Levels of the level kit (DT_KeepersLevels).
+		for (const FKeepersLevelRow* Row : KeepersLevelKit::GetRows())
+		{
+			if (!Row->bQuickBattle)
+			{
+				continue;
+			}
+			const FName Level(Row->Level.ToSoftObjectPath().GetLongPackageName());
+			const FString Title = Row->Title.IsEmpty() ? FPackageName::GetShortName(Level.ToString()) : Row->Title.ToString();
+			AddItem(*Title, *Row->Subtitle.ToString(), [WeakThis, Level]()
+			{
+				if (WeakThis.IsValid())
+				{
+					if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get()))
 					{
-						UKeepersMapGenerator::SetNextMap(FMath::RandRange(1, 999999), static_cast<EKeepersBiome>(FMath::RandRange(0, 5)));
+						Campaign->bMercenaryQuickBattle = false;
 					}
 					WeakThis->Leave([WeakThis, Level]() { if (WeakThis.IsValid()) { KeepersLoading::OpenLevel(WeakThis.Get(), Level); } });
 				}

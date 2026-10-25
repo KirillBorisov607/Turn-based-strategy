@@ -3,11 +3,17 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "Keepers Dev Tools",
-	"Description": "Editor-only tools for Keepers of the Lands: export Blueprint graphs to text for review.",
+	"Description": "Editor-only tools for Keepers of the Lands: export Blueprint graphs to text for review, the level kit (menu Keepers).",
 	"Category": "Keepers",
 	"CreatedBy": "Keepers of the Lands",
 	"EnabledByDefault": true,
 	"CanContainContent": false,
+	"Plugins": [
+		{
+			"Name": "KeepersGame",
+			"Enabled": true
+		}
+	],
 	"Modules": [
 		{
 			"Name": "KeepersDevTools",

@@ -1,4 +1,5 @@
 #include "KeepersEditorLibrary.h"
+#include "KeepersLevelTools.h"
 
 #include "Engine/UserDefinedEnum.h"
 #include "Kismet2/EnumEditorUtils.h"
@@ -23,4 +24,14 @@ int32 UKeepersEditorLibrary::AddUserEnumEntry(UUserDefinedEnum* Enum, const FStr
 	const int32 NewIndex = Enum->NumEnums() - 2;
 	FEnumEditorUtils::SetEnumeratorDisplayName(Enum, NewIndex, FText::FromString(DisplayName));
 	return NewIndex;
+}
+
+FString UKeepersEditorLibrary::CreateBattleLevel(const FString& Title)
+{
+	return KeepersLevelTools::CreateLevel(Title);
+}
+
+FString UKeepersEditorLibrary::CheckBattleLevel()
+{
+	return KeepersLevelTools::CheckReport();
 }

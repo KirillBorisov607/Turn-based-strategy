@@ -1,5 +1,6 @@
 ﻿#include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
 #include "KeepersLoadingScreen.h"
 
@@ -109,6 +110,21 @@ bool UKeepersCampaignSubsystem::ContinueCampaign()
 void UKeepersCampaignSubsystem::GenerateMap(int32 Seed)
 {
 	FRandomStream Random(Seed);
+	// Battle levels: the built-in ones and the levels of the level kit (DT_KeepersLevels).
+	TArray<FName> Battles = KeepersCampaign::BattleLevels;
+	TArray<FName> Elites = KeepersCampaign::EliteLevels;
+	for (const FKeepersLevelRow* Row : KeepersLevelKit::GetRows())
+	{
+		const FName Level(Row->Level.ToSoftObjectPath().GetLongPackageName());
+		if (Row->Kind == EKeepersLevelKind::Battle)
+		{
+			Battles.AddUnique(Level);
+		}
+		else if (Row->Kind == EKeepersLevelKind::Elite)
+		{
+			Elites.AddUnique(Level);
+		}
+	}
 	Save->Seed = Seed;
 	Save->Nodes.Reset();
 
@@ -146,12 +162,10 @@ void UKeepersCampaignSubsystem::GenerateMap(int32 Seed)
 			switch (Node.Type)
 			{
 			case EKeepersNodeType::Battle:
-				// Most battles are on a new, generated field; some on the hand-made ones.
-				Node.Level = Random.FRand() < 0.7f ? UKeepersMapGenerator::Level
-					: KeepersCampaign::BattleLevels[Random.RandRange(0, KeepersCampaign::BattleLevels.Num() - 1)];
+				Node.Level = Battles[Random.RandRange(0, Battles.Num() - 1)];
 				break;
 			case EKeepersNodeType::Elite:
-				Node.Level = KeepersCampaign::EliteLevels[Random.RandRange(0, KeepersCampaign::EliteLevels.Num() - 1)];
+				Node.Level = Elites[Random.RandRange(0, Elites.Num() - 1)];
 				break;
 			case EKeepersNodeType::Boss:
 				Node.Level = KeepersCampaign::BossLevel;

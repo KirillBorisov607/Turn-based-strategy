@@ -18,4 +18,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Editor")
 	static int32 AddUserEnumEntry(UUserDefinedEnum* Enum, const FString& DisplayName);
+
+	/** Level kit: a new battle level from the template, added to the game. Returns its package. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Editor")
+	static FString CreateBattleLevel(const FString& Title);
+
+	/** Level kit: the check of the open level, as text. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Editor")
+	static FString CheckBattleLevel();
 };
