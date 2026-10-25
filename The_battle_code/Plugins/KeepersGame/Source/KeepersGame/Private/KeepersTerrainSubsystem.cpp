@@ -1,8 +1,10 @@
 #include "KeepersTerrainSubsystem.h"
 
 #include "Engine/World.h"
+#include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "KeepersReflection.h"
+#include "KeepersPlantActor.h"
 #include "KeepersRockActor.h"
 #include "TimerManager.h"
 
@@ -12,11 +14,13 @@ namespace KeepersTerrain
 {
 	static const FString RaiseRockAnimation = TEXT("BP_SpellAnim_RaiseRock");
 	static const FString GustAnimation = TEXT("BP_SpellAnim_Gust");
+	static const FString SproutAnimation = TEXT("BP_SpellAnim_Sprout");
 	static const FString CombatSystemClass = TEXT("BP_CombatSystem_C");
 
 	/** E_TileType values. */
 	static constexpr uint8 ObstacleTileType = 2;
 	static constexpr uint8 ChasmTileType = 5; // FlyingUnitsOnly
+	static constexpr uint8 ForestTileType = 3; // DoubleCost
 
 	static constexpr int32 BumpDamage = 1;
 
@@ -104,6 +108,15 @@ namespace KeepersTerrain
 		return false;
 	}
 
+	static FVector GetTileSize(UObject* Grid)
+	{
+		if (const void* SizePtr = Grid ? KeepersReflection::FindValuePtr(Grid->GetClass(), Grid, TEXT("GridTileSize")) : nullptr)
+		{
+			return *static_cast<const FVector*>(SizePtr);
+		}
+		return FVector(200.f, 200.f, 100.f);
+	}
+
 	static UObject* FindCombatSystem(UWorld* World)
 	{
 		for (TActorIterator<AActor> It(World); It; ++It)
@@ -152,6 +165,10 @@ void UKeepersTerrainSubsystem::OnActorSpawned(AActor* Actor)
 	{
 		PendingEffects.Add(Actor, EKeepersTerrainEffect::Push);
 	}
+	else if (ClassName.StartsWith(KeepersTerrain::SproutAnimation))
+	{
+		PendingEffects.Add(Actor, EKeepersTerrainEffect::Sprout);
+	}
 	else
 	{
 		return;
@@ -195,20 +212,18 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 	case EKeepersTerrainEffect::Push:
 		PushUnit(KeepersTerrain::FindCombatSystem(GetWorld()), Origin, Target);
 		break;
+	case EKeepersTerrainEffect::Sprout:
+		GrowForest(Grid, Target);
+		break;
 	}
 }
 
-bool UKeepersTerrainSubsystem::RaiseRock(UObject* Grid, FIntPoint Index, int32 Levels)
+bool UKeepersTerrainSubsystem::SetTileType(UObject* Grid, const FIntPoint& Index, uint8 Type, FTransform& OutTransform)
 {
 	const UScriptStruct* TileStruct = nullptr;
 	const uint8* Tile = KeepersTerrain::FindTile(Grid, Index, &TileStruct);
 	if (!Tile)
 	{
-		return false;
-	}
-	if (KeepersTerrain::GetUnitOnTile(Grid, Index))
-	{
-		UE_LOG(LogKeepersTerrain, Log, TEXT("RaiseRock: tile (%d,%d) is occupied"), Index.X, Index.Y);
 		return false;
 	}
 
@@ -222,26 +237,36 @@ bool UKeepersTerrainSubsystem::RaiseRock(UObject* Grid, FIntPoint Index, int32 L
 	void* TypePtr = KeepersReflection::FindValuePtr(TileStruct, Data.GetData(), TEXT("Type"), &TypeProperty);
 	if (FByteProperty* ByteType = CastField<FByteProperty>(TypeProperty))
 	{
-		ByteType->SetPropertyValue(TypePtr, KeepersTerrain::ObstacleTileType);
+		ByteType->SetPropertyValue(TypePtr, Type);
 	}
 
-	FTransform TileTransform = FTransform::Identity;
+	OutTransform = FTransform::Identity;
 	if (const void* TransformPtr = KeepersReflection::FindValuePtr(TileStruct, Data.GetData(), TEXT("Transform")))
 	{
-		TileTransform = *static_cast<const FTransform*>(TransformPtr);
+		OutTransform = *static_cast<const FTransform*>(TransformPtr);
 	}
 
 	KeepersReflection::FCall AddTile(Grid, TEXT("AddGridTile"));
 	AddTile.SetRaw(TEXT("Data"), Data.GetData());
 	AddTile.Call();
 	TileStruct->DestroyStruct(Data.GetData());
+	return true;
+}
 
-	FVector TileSize(200.f, 200.f, 100.f);
-	if (const void* SizePtr = KeepersReflection::FindValuePtr(Grid->GetClass(), Grid, TEXT("GridTileSize")))
+bool UKeepersTerrainSubsystem::RaiseRock(UObject* Grid, FIntPoint Index, int32 Levels)
+{
+	if (KeepersTerrain::GetUnitOnTile(Grid, Index))
 	{
-		TileSize = *static_cast<const FVector*>(SizePtr);
+		UE_LOG(LogKeepersTerrain, Log, TEXT("RaiseRock: tile (%d,%d) is occupied"), Index.X, Index.Y);
+		return false;
+	}
+	FTransform TileTransform;
+	if (!SetTileType(Grid, Index, KeepersTerrain::ObstacleTileType, TileTransform))
+	{
+		return false;
 	}
 
+	const FVector TileSize = KeepersTerrain::GetTileSize(Grid);
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AKeepersRockActor* Rock = GetWorld()->SpawnActor<AKeepersRockActor>(TileTransform.GetLocation(), TileTransform.Rotator(), Params);
@@ -249,10 +274,51 @@ bool UKeepersTerrainSubsystem::RaiseRock(UObject* Grid, FIntPoint Index, int32 L
 	{
 		Rock->SetActorScale3D(FVector(TileSize.X / 200.f * 0.95f, TileSize.Y / 200.f * 0.95f, 1.f));
 		Rock->Rise(TileTransform.GetLocation(), TileTransform.GetLocation().Z + TileSize.Z * Levels);
-		Rocks.Add(Rock);
+		TerrainProps.Add(Rock);
 	}
 
 	UE_LOG(LogKeepersTerrain, Log, TEXT("RaiseRock at (%d,%d)"), Index.X, Index.Y);
+	return true;
+}
+
+bool UKeepersTerrainSubsystem::GrowForest(UObject* Grid, FIntPoint Index)
+{
+	uint8 Type = 0;
+	if (!KeepersTerrain::GetTileType(Grid, Index, Type) || Type == KeepersTerrain::ObstacleTileType || Type == KeepersTerrain::ChasmTileType)
+	{
+		return false;
+	}
+	const bool bOccupied = KeepersTerrain::GetUnitOnTile(Grid, Index) != nullptr;
+	FTransform TileTransform;
+	if (!SetTileType(Grid, Index, KeepersTerrain::ForestTileType, TileTransform))
+	{
+		return false;
+	}
+
+	static const TCHAR* Trees[] = {
+		TEXT("/Game/Art/Meshes/SM_Tree_01.SM_Tree_01"), TEXT("/Game/Art/Meshes/SM_Tree_02.SM_Tree_02"), TEXT("/Game/Art/Meshes/SM_Tree_03.SM_Tree_03") };
+	static const TCHAR* Bushes[] = {
+		TEXT("/Game/Art/Meshes/SM_Bush_01.SM_Bush_01"), TEXT("/Game/Art/Meshes/SM_Bush_03.SM_Bush_03") };
+	// Stable choice per tile so a forest looks varied but does not flicker between casts.
+	const uint32 Pick = GetTypeHash(Index);
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, bOccupied ? Bushes[Pick % UE_ARRAY_COUNT(Bushes)] : Trees[Pick % UE_ARRAY_COUNT(Trees)]);
+
+	const FVector TileSize = KeepersTerrain::GetTileSize(Grid);
+	const FRotator Yaw(0.f, static_cast<float>(Pick % 360), 0.f);
+	FVector Location = TileTransform.GetLocation();
+	if (bOccupied)
+	{
+		Location += Yaw.Vector() * TileSize.X * 0.3f; // beside the unit, not inside it
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (AKeepersPlantActor* Plant = GetWorld()->SpawnActor<AKeepersPlantActor>(Location, Yaw, Params))
+	{
+		Plant->Grow(Mesh, TileSize.X / 200.f * (bOccupied ? 0.9f : 0.8f), !bOccupied);
+		TerrainProps.Add(Plant);
+	}
+
+	UE_LOG(LogKeepersTerrain, Log, TEXT("GrowForest at (%d,%d)%s"), Index.X, Index.Y, bOccupied ? TEXT(" (bush)") : TEXT(""));
 	return true;
 }
 
@@ -273,11 +339,7 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	const FVector PushDirection = (TargetLocation - OriginLocation).GetSafeNormal2D();
 
 	// The neighbour of Target that lies furthest along the push direction (works for every grid shape).
-	FVector TileSize(200.f, 200.f, 100.f);
-	if (const void* SizePtr = KeepersReflection::FindValuePtr(Grid->GetClass(), Grid, TEXT("GridTileSize")))
-	{
-		TileSize = *static_cast<const FVector*>(SizePtr);
-	}
+	const FVector TileSize = KeepersTerrain::GetTileSize(Grid);
 	TOptional<FIntPoint> Destination;
 	float BestAlignment = 0.5f;
 	for (int32 DX = -2; DX <= 2; ++DX)

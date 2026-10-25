@@ -9,7 +9,8 @@ class AKeepersRockActor;
 enum class EKeepersTerrainEffect : uint8
 {
 	RaiseRock,
-	Push
+	Push,
+	Sprout
 };
 
 /**
@@ -22,6 +23,8 @@ enum class EKeepersTerrainEffect : uint8
  *  - BP_SpellAnim_Gust: the unit on the target tile is pushed one tile away from the caster.
  *    Blocked by a rock, a unit or the edge: 1 damage (and 1 to the unit it bumps into).
  *    Pushed over a chasm it cannot stand on: it falls and dies.
+ *  - BP_SpellAnim_Sprout: the target tile becomes forest (DoubleCost). An empty tile grows a tree that
+ *    blocks line of sight; an occupied tile grows a bush.
  */
 UCLASS()
 class KEEPERSGAME_API UKeepersTerrainSubsystem : public UWorldSubsystem
@@ -32,6 +35,10 @@ public:
 	/** Turns an empty tile into an Obstacle and raises a stone column on it. Returns false if the tile is taken. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Terrain")
 	bool RaiseRock(UObject* Grid, FIntPoint Index, int32 Levels = 2);
+
+	/** Turns a tile into forest and grows a tree (or a bush under a unit). Returns false on rocks and chasms. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Terrain")
+	bool GrowForest(UObject* Grid, FIntPoint Index);
 
 	/** Pushes the unit on Target one tile away from Origin. Returns false if there was no unit. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Terrain")
@@ -47,6 +54,9 @@ private:
 	UFUNCTION()
 	void OnTerrainAnimationDestroyed(AActor* Animation);
 
+	/** Sets a tile's E_TileType through BP_Grid.AddGridTile; returns the tile transform. */
+	static bool SetTileType(UObject* Grid, const FIntPoint& Index, uint8 Type, FTransform& OutTransform);
+
 	/** Damages a unit and lets the combat system process its death. */
 	static void DamageUnit(UObject* CombatSystem, UObject* Unit, int32 Amount);
 
@@ -55,5 +65,5 @@ private:
 	TMap<TWeakObjectPtr<AActor>, EKeepersTerrainEffect> PendingEffects;
 
 	UPROPERTY()
-	TArray<TObjectPtr<AKeepersRockActor>> Rocks;
+	TArray<TObjectPtr<AActor>> TerrainProps;
 };
