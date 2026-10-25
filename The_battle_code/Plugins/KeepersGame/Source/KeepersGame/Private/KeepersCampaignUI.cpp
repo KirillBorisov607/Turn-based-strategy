@@ -438,7 +438,11 @@ void UKeepersCampaignWorldSubsystem::SetUiInput(UUserWidget* Focus)
 	if (APlayerController* Player = GetWorld()->GetFirstPlayerController())
 	{
 		Player->SetShowMouseCursor(true);
-		FInputModeUIOnly Mode;
+		// Game and UI, never UI-only: the input mode lives in the game viewport and survives level loads,
+		// so UI-only would leave the next battle without camera or clicks.
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Mode.SetHideCursorDuringCapture(false);
 		if (Focus)
 		{
 			Mode.SetWidgetToFocus(Focus->TakeWidget());
@@ -600,6 +604,15 @@ void UKeepersCampaignWorldSubsystem::TickBattle()
 	if (bInCombat && !bArtifactsApplied)
 	{
 		bArtifactsApplied = true;
+		// Give the battle full game input, whatever screen came before it.
+		if (APlayerController* Player = GetWorld()->GetFirstPlayerController())
+		{
+			FInputModeGameAndUI Mode;
+			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			Mode.SetHideCursorDuringCapture(false);
+			Player->SetInputMode(Mode);
+			Player->SetShowMouseCursor(true);
+		}
 		ApplyArtifactsAtBattleStart(CombatSystem);
 	}
 	if (bInCombat && !bFinishing)

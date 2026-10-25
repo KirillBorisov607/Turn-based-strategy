@@ -15,7 +15,10 @@ public class KeepersDevTools : ModuleRules
 			"BlueprintGraph",
 			"Kismet",
 			"AssetRegistry",
-			"Projects"
+			"Projects",
+			"Slate",
+			"SlateCore",
+			"InputCore"
 		});
 	}
 }
