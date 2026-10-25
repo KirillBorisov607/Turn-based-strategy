@@ -8,6 +8,7 @@
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "KeepersAbilityBar.h"
 #include "KeepersHeroes.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
@@ -144,6 +145,16 @@ void UKeepersBattleHudSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	KeepersSettings::ApplyVolume(&InWorld);
 }
 
+void UKeepersBattleHudSubsystem::TestAbility(const UObject* WorldContextObject, int32 Index)
+{
+	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
+	UKeepersBattleHudSubsystem* Hud = World ? World->GetSubsystem<UKeepersBattleHudSubsystem>() : nullptr;
+	if (Hud && Hud->AbilityBar)
+	{
+		Hud->AbilityBar->Press(Index);
+	}
+}
+
 FText UKeepersBattleHudSubsystem::LocalUnitName(const FString& EnglishName)
 {
 	static const TMap<FString, FString> Names =
@@ -182,6 +193,25 @@ void UKeepersBattleHudSubsystem::Tick(float DeltaTime)
 			}
 		}
 	}
+	// The ability bar follows the Blueprint spell list closely: selection must feel instant.
+	AbilityTimer -= DeltaTime;
+	if (SkinnedHud.IsValid() && AbilityTimer <= 0.f)
+	{
+		AbilityTimer = 0.05f;
+		if (!AbilityBar)
+		{
+			if (APlayerController* Player = World->GetFirstPlayerController())
+			{
+				AbilityBar = CreateWidget<UKeepersAbilityBar>(Player, UKeepersAbilityBar::StaticClass());
+				AbilityBar->AddToViewport(14);
+			}
+		}
+		if (AbilityBar)
+		{
+			AbilityBar->Sync(SkinnedHud.Get());
+		}
+	}
+
 	RefreshTimer -= DeltaTime;
 	if (SkinnedHud.IsValid() && RefreshTimer <= 0.f)
 	{
@@ -263,6 +293,11 @@ void UKeepersBattleHudSubsystem::Skin(UUserWidget* Hud)
 	PanelOf(TEXT("Border"), 12.f, FMargin(14.f, 8.f));
 	PanelOf(TEXT("Border_2"), 12.f, FMargin(6.f));
 	PanelOf(TEXT("Border_Spells"), 14.f, FMargin(10.f, 6.f));
+	// The Blueprint spell list keeps working out of sight; UKeepersAbilityBar shows and presses it.
+	if (UWidget* Spells = Tree->FindWidget(TEXT("Border_Spells")))
+	{
+		Spells->SetVisibility(ESlateVisibility::Hidden);
+	}
 	PanelOf(TEXT("Border_0"), 12.f, FMargin(8.f));
 	if (UBorder* EndTurnBorder = Cast<UBorder>(Tree->FindWidget(TEXT("Border_EndTurn"))))
 	{

@@ -52,6 +52,10 @@ public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
+	/** Test hook: presses ability Index on the ability bar. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers", meta = (WorldContext = "WorldContextObject"))
+	static void TestAbility(const UObject* WorldContextObject, int32 Index);
+
 	/** Russian name of a unit type as the HUD shows it ("Priest" -> "Друид"); empty if unknown. */
 	static FText LocalUnitName(const FString& EnglishName);
 
@@ -71,6 +75,12 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UKeepersPhaseWidget> Phase;
+
+	/** Big ability buttons with tooltips over the Blueprint spell list. */
+	UPROPERTY()
+	TObjectPtr<class UKeepersAbilityBar> AbilityBar;
+
+	float AbilityTimer = 0.f;
 
 	int32 Round = 0;
 	int32 LastTeam = INDEX_NONE;
