@@ -145,7 +145,7 @@ void UKeepersJuiceSubsystem::Burst(UWorld* World, const FVector& Location, AKeep
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	if (AKeepersBurst* Burst = World ? World->SpawnActor<AKeepersBurst>(Location, FRotator::ZeroRotator, Params) : nullptr)
 	{
-		UE_LOG(LogKeepersJuice, Log, TEXT("Burst %d at %s"), static_cast<int32>(Kind), *Location.ToString());
+		UE_LOG(LogKeepersJuice, Verbose, TEXT("Burst %d at %s"), static_cast<int32>(Kind), *Location.ToString());
 		Burst->Start(Kind, Color, Count, Size);
 	}
 }
@@ -183,7 +183,7 @@ void UKeepersJuiceSubsystem::Tick(float DeltaTime)
 		int32* Known = Health.Find(Unit);
 		if (!Known)
 		{
-			UE_LOG(LogKeepersJuice, Log, TEXT("Watching %s, %d HP"), *Unit->GetName(), Hp);
+			UE_LOG(LogKeepersJuice, Verbose, TEXT("Watching %s, %d HP"), *Unit->GetName(), Hp);
 			Health.Add(Unit, Hp);
 			continue;
 		}
