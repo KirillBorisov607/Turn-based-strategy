@@ -18,7 +18,9 @@ public class KeepersDevTools : ModuleRules
 			"Projects",
 			"Slate",
 			"SlateCore",
-			"InputCore"
+			"InputCore",
+			"UMG",
+			"RenderCore"
 		});
 	}
 }

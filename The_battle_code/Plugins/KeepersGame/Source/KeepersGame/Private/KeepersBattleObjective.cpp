@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "KeepersReflection.h"
+#include "KeepersStyle.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKeepersObjective, Log, All);
 
@@ -62,24 +63,16 @@ TSharedRef<SWidget> UKeepersObjectiveWidget::RebuildWidget()
 	if (WidgetTree && !WidgetTree->RootWidget)
 	{
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Box"));
-		Box->SetBrushColor(FLinearColor(0.02f, 0.03f, 0.05f, 0.75f));
-		Box->SetPadding(FMargin(18.f, 8.f));
-		FSlateBrush Brush = Box->Background;
-		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
-		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(12.f, 12.f, 12.f, 12.f));
-		Box->SetBrush(Brush);
+		Box->SetBrush(KeepersStyle::Panel(KeepersStyle::Ink, 12.f));
+		Box->SetPadding(FMargin(22.f, 6.f));
 
 		UVerticalBox* Lines = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Lines"));
 		TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Title"));
 		ProgressText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Progress"));
-		FSlateFontInfo TitleFont = TitleText->GetFont();
-		TitleFont.Size = 18;
-		TitleText->SetFont(TitleFont);
-		TitleText->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 0.85f, 0.4f)));
-		FSlateFontInfo ProgressFont = ProgressText->GetFont();
-		ProgressFont.Size = 14;
-		ProgressText->SetFont(ProgressFont);
-		ProgressText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		TitleText->SetFont(KeepersStyle::Heading(24));
+		TitleText->SetColorAndOpacity(FSlateColor(KeepersStyle::Gold));
+		ProgressText->SetFont(KeepersStyle::Body(14));
+		ProgressText->SetColorAndOpacity(FSlateColor(KeepersStyle::Text));
 		if (UVerticalBoxSlot* TitleSlot = Lines->AddChildToVerticalBox(TitleText))
 		{
 			TitleSlot->SetHorizontalAlignment(HAlign_Center);

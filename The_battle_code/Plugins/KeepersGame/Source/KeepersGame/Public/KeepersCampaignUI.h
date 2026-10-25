@@ -79,13 +79,15 @@ private:
 	void ShowArtifactChoice(const FText& Title, const FText& Subtitle, int32 Count);
 	FVector2D NodeAnchor(int32 NodeIndex) const;
 
+	UFUNCTION()
+	void HandleMenuClicked();
+
 	UPROPERTY()
 	TObjectPtr<UCanvasPanel> Canvas;
 };
 
 /**
  * Campaign behaviour of the current level:
- *  - main menu: adds the "Campaign" and "Continue" buttons to W_MainMenu;
  *  - region map level: shows the map;
  *  - a campaign battle: applies artifacts when the battle starts, heals heroes in forests with the
  *    World Tree Root, and when the battle ends offers a reward (or ends the run).
@@ -104,22 +106,12 @@ public:
 	UKeepersChoiceWidget* ShowChoice(const FText& Title, const FText& Subtitle, TArray<UKeepersChoiceWidget::FOption> Options);
 
 private:
-	void TryExtendMainMenu();
 	void ShowMap();
 	void TickBattle();
 	void ApplyArtifactsAtBattleStart(UObject* CombatSystem);
 	void OnRoundStarted(UObject* CombatSystem);
 	void OnBattleFinished(UObject* CombatSystem, int32 Winner);
 	void SetUiInput(UUserWidget* Focus);
-
-	UFUNCTION()
-	void OnCampaignClicked();
-
-	UFUNCTION()
-	void OnContinueClicked();
-
-	UFUNCTION()
-	void OnTutorialClicked();
 
 	/** Every battle shows a goal: a campaign battle gets one picked by its node, others "defeat all". */
 	void EnsureObjective();
@@ -129,7 +121,6 @@ private:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> Screen;
 
-	bool bMenuExtended = false;
 	bool bMapShown = false;
 	bool bArtifactsApplied = false;
 	bool bBattleResolved = false;

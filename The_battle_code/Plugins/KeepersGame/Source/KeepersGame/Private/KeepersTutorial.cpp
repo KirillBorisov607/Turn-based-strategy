@@ -14,6 +14,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "KeepersReflection.h"
+#include "KeepersStyle.h"
 
 bool UKeepersTutorialSubsystem::bPendingTutorial = false;
 
@@ -46,41 +47,21 @@ namespace KeepersTutorial
 		  TEXT("Слизни оставляют лужи и делятся, куры зовут подмогу. Используйте местность: скалы, лес, обрывы. Побеждайте в кампании и собирайте артефакты."), true },
 	};
 
+	/** Size 18+ is a heading (display font), smaller sizes are reading text. */
 	static UTextBlock* Text(UWidgetTree* Tree, int32 Size, const FLinearColor& Color)
 	{
-		UTextBlock* Block = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		FSlateFontInfo Font = Block->GetFont();
-		Font.Size = Size;
-		Block->SetFont(Font);
-		Block->SetColorAndOpacity(FSlateColor(Color));
-		Block->SetAutoWrapText(true);
+		UTextBlock* Block = KeepersStyle::MakeText(Tree, FText::GetEmpty(), Size >= 18 ? KeepersStyle::Heading(Size + 6) : KeepersStyle::Body(Size), Color, true);
 		return Block;
 	}
 
 	static FSlateBrush Rounded(const FLinearColor& Color)
 	{
-		FSlateBrush Brush;
-		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
-		Brush.TintColor = FSlateColor(Color);
-		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(10.f, 10.f, 10.f, 10.f));
-		return Brush;
+		return KeepersStyle::Panel(Color, 12.f);
 	}
 
-	static UButton* MakeButton(UWidgetTree* Tree, const TCHAR* Label, const FLinearColor& Color)
+	static UButton* MakeButton(UWidgetTree* Tree, const TCHAR* Label, bool bPrimary)
 	{
-		UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass());
-		FButtonStyle Style = Button->GetStyle();
-		Style.Normal = Rounded(Color);
-		Style.Hovered = Rounded(Color * 1.3f);
-		Style.Pressed = Rounded(Color * 0.8f);
-		Style.NormalPadding = FMargin(14.f, 6.f);
-		Style.PressedPadding = FMargin(14.f, 7.f, 14.f, 5.f);
-		Button->SetStyle(Style);
-		UTextBlock* Caption = Text(Tree, 14, FLinearColor::White);
-		Caption->SetAutoWrapText(false);
-		Caption->SetText(FText::FromString(Label));
-		Button->AddChild(Caption);
-		return Button;
+		return KeepersStyle::MakeButton(Tree, FText::FromString(Label), bPrimary ? KeepersStyle::EButton::Primary : KeepersStyle::EButton::Secondary, 16);
 	}
 
 	static UObject* FindCombatSystem(UWorld* World)
@@ -160,12 +141,12 @@ TSharedRef<SWidget> UKeepersTutorialWidget::RebuildWidget()
 		Size->SetWidthOverride(380.f);
 
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		Panel->SetBrush(KeepersTutorial::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.88f)));
+		Panel->SetBrush(KeepersTutorial::Rounded(KeepersStyle::Ink));
 		Panel->SetPadding(FMargin(18.f, 14.f));
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		CounterText = KeepersTutorial::Text(WidgetTree, 11, FLinearColor(0.7f, 0.75f, 0.8f));
-		TitleText = KeepersTutorial::Text(WidgetTree, 19, FLinearColor(1.f, 0.85f, 0.4f));
+		CounterText = KeepersTutorial::Text(WidgetTree, 11, KeepersStyle::TextDim);
+		TitleText = KeepersTutorial::Text(WidgetTree, 19, KeepersStyle::Gold);
 		BodyText = KeepersTutorial::Text(WidgetTree, 14, FLinearColor::White);
 		Column->AddChildToVerticalBox(CounterText);
 		if (UVerticalBoxSlot* TitleSlot = Column->AddChildToVerticalBox(TitleText))
@@ -175,8 +156,8 @@ TSharedRef<SWidget> UKeepersTutorialWidget::RebuildWidget()
 		Column->AddChildToVerticalBox(BodyText);
 
 		UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		UButton* Skip = KeepersTutorial::MakeButton(WidgetTree, TEXT("Пропустить обучение"), FLinearColor(0.2f, 0.2f, 0.25f));
-		NextButton = KeepersTutorial::MakeButton(WidgetTree, TEXT("Далее"), FLinearColor(0.25f, 0.45f, 0.3f));
+		UButton* Skip = KeepersTutorial::MakeButton(WidgetTree, TEXT("Пропустить обучение"), false);
+		NextButton = KeepersTutorial::MakeButton(WidgetTree, TEXT("Далее"), true);
 		Skip->OnClicked.AddDynamic(this, &UKeepersTutorialWidget::HandleSkip);
 		NextButton->OnClicked.AddDynamic(this, &UKeepersTutorialWidget::HandleNext);
 		Buttons->AddChildToHorizontalBox(Skip);

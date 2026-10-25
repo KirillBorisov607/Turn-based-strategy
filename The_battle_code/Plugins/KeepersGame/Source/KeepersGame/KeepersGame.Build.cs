@@ -13,7 +13,8 @@ public class KeepersGame : ModuleRules
 			"Engine",
 			"UMG",
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"InputCore"
 		});
 	}
 }

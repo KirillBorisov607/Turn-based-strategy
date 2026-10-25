@@ -33,6 +33,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Testing", meta = (WorldContext = "WorldContext"))
 	static bool ScrollWheel(UObject* WorldContext, float Delta);
 
+	/**
+	 * Renders the game viewport's UI layer (all UMG widgets) into a PNG with a transparent background,
+	 * so a test can lay it over a HighResShot of the same size without capturing the desktop.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Testing", meta = (WorldContext = "WorldContext"))
+	static bool SaveViewportUI(UObject* WorldContext, const FString& Path, int32 Width = 1280, int32 Height = 720);
+
 	/** Presses or releases a key by name ("W", "E", "Escape"). */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Testing")
 	static bool SetKey(FName Key, bool bDown);

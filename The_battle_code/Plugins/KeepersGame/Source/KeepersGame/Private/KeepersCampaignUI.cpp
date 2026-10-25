@@ -5,8 +5,6 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Components/GridPanel.h"
-#include "Components/GridSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
@@ -21,8 +19,8 @@
 #include "KeepersBattleObjective.h"
 #include "KeepersCampaign.h"
 #include "KeepersCreatureSubsystem.h"
-#include "KeepersTutorial.h"
 #include "KeepersReflection.h"
+#include "KeepersStyle.h"
 #include "KeepersTerrainSubsystem.h"
 #include "Rendering/DrawElements.h"
 #include "UObject/UObjectIterator.h"
@@ -31,29 +29,21 @@ DEFINE_LOG_CATEGORY_STATIC(LogKeepersCampaignUI, Log, All);
 
 namespace KeepersUI
 {
-	static const FLinearColor Gold(1.f, 0.85f, 0.4f);
-	static const FLinearColor PanelColor(0.02f, 0.03f, 0.05f, 0.85f);
+	static const FLinearColor Gold = KeepersStyle::Gold;
+	static const FLinearColor PanelColor = KeepersStyle::Ink;
 
+	/** Titles and captions use the display font, longer lines the reading font. */
 	static UTextBlock* MakeText(UWidgetTree* Tree, const FText& Text, int32 Size, const FLinearColor& Color, bool bWrap = false)
 	{
-		UTextBlock* Block = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		FSlateFontInfo Font = Block->GetFont();
-		Font.Size = Size;
-		Block->SetFont(Font);
-		Block->SetColorAndOpacity(FSlateColor(Color));
-		Block->SetText(Text);
+		const bool bHeading = Size >= 17;
+		UTextBlock* Block = KeepersStyle::MakeText(Tree, Text, bHeading ? KeepersStyle::Heading(Size + 4) : KeepersStyle::Body(Size), Color, bWrap);
 		Block->SetJustification(ETextJustify::Center);
-		Block->SetAutoWrapText(bWrap);
 		return Block;
 	}
 
-	static FSlateBrush Rounded(const FLinearColor& Color, float Radius = 10.f)
+	static FSlateBrush Rounded(const FLinearColor& Color, float Radius = 10.f, const FLinearColor& Edge = KeepersStyle::GoldDim)
 	{
-		FSlateBrush Brush;
-		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
-		Brush.TintColor = FSlateColor(Color);
-		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(Radius, Radius, Radius, Radius));
-		return Brush;
+		return KeepersStyle::Panel(Color, Radius, Edge);
 	}
 
 	static FLinearColor NodeColor(EKeepersNodeType Type)
@@ -304,12 +294,21 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 			ShadeSlot->SetOffsets(FMargin(0.f));
 		}
 
-		UTextBlock* Title = KeepersUI::MakeText(WidgetTree, FText::FromString(TEXT("Зелёные долы — выберите путь")), 30, KeepersUI::Gold);
-		if (UCanvasPanelSlot* TitleSlot = Canvas->AddChildToCanvas(Title))
+		// Title bar, as in the main menu.
+		UBorder* TopBar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		TopBar->SetBrush(KeepersStyle::Panel(FLinearColor(0.f, 0.f, 0.f, 0.55f), 0.f, FLinearColor::Transparent));
+		TopBar->SetPadding(FMargin(60.f, 10.f));
+		TopBar->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBox* TitleRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		TitleRow->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, FText::FromString(TEXT("Зелёные долы")), KeepersStyle::Heading(38), KeepersStyle::Gold))
+			->SetVerticalAlignment(VAlign_Center);
+		TitleRow->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, FText::FromString(TEXT("Выберите следующую точку пути. Открыты только соседние с пройденными.")), KeepersStyle::Body(14), KeepersStyle::TextDim))
+			->SetPadding(FMargin(24.f, 6.f, 0.f, 0.f));
+		TopBar->SetContent(TitleRow);
+		if (UCanvasPanelSlot* TopSlot = Canvas->AddChildToCanvas(TopBar))
 		{
-			TitleSlot->SetAnchors(FAnchors(0.5f, 0.06f));
-			TitleSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-			TitleSlot->SetAutoSize(true);
+			TopSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 0.f));
+			TopSlot->SetOffsets(FMargin(0.f, 0.f, 0.f, 70.f));
 		}
 
 		const TArray<int32> Available = Campaign->GetAvailableNodes();
@@ -344,32 +343,25 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 			}
 		}
 		const FString ArtifactsLine = Owned.Num() > 0 ? TEXT("Артефакты: ") + FString::Join(Owned, TEXT(", ")) : TEXT("Артефактов пока нет — их дают победы и руины.");
-		UTextBlock* ArtifactsText = KeepersUI::MakeText(WidgetTree, FText::FromString(ArtifactsLine), 15, FLinearColor::White);
-		if (UCanvasPanelSlot* ArtifactsSlot = Canvas->AddChildToCanvas(ArtifactsText))
+		// Bottom bar: artifacts on the left, back to the menu on the right.
+		UBorder* BottomBar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		BottomBar->SetBrush(KeepersStyle::Panel(FLinearColor(0.f, 0.f, 0.f, 0.6f), 0.f, FLinearColor::Transparent));
+		BottomBar->SetPadding(FMargin(60.f, 0.f, 24.f, 0.f));
+		BottomBar->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBox* BottomRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		UHorizontalBoxSlot* ArtifactsSlot = BottomRow->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, FText::FromString(ArtifactsLine), KeepersStyle::Body(15), KeepersStyle::Text));
+		ArtifactsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		ArtifactsSlot->SetVerticalAlignment(VAlign_Center);
+		BottomBar->SetContent(BottomRow);
+		if (UCanvasPanelSlot* BottomSlot = Canvas->AddChildToCanvas(BottomBar))
 		{
-			ArtifactsSlot->SetAnchors(FAnchors(0.5f, 0.9f));
-			ArtifactsSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-			ArtifactsSlot->SetAutoSize(true);
+			BottomSlot->SetAnchors(FAnchors(0.f, 1.f, 1.f, 1.f));
+			BottomSlot->SetOffsets(FMargin(0.f, -56.f, 0.f, 56.f));
 		}
 
-		UKeepersOptionButton* Menu = CreateWidget<UKeepersOptionButton>(this, UKeepersOptionButton::StaticClass());
-		TWeakObjectPtr<UKeepersCampaignMapWidget> WeakThis(this);
-		Menu->Setup(FText::FromString(TEXT("В меню")), FText::GetEmpty(), FLinearColor(0.2f, 0.2f, 0.25f), [WeakThis]()
-		{
-			if (WeakThis.IsValid())
-			{
-				if (UKeepersCampaignSubsystem* Subsystem = UKeepersCampaignSubsystem::Get(WeakThis.Get()))
-				{
-					Subsystem->ReturnToMainMenu(WeakThis.Get());
-				}
-			}
-		}, true, 140.f);
-		if (UCanvasPanelSlot* MenuSlot = Canvas->AddChildToCanvas(Menu))
-		{
-			MenuSlot->SetAnchors(FAnchors(0.97f, 0.96f));
-			MenuSlot->SetAlignment(FVector2D(1.f, 1.f));
-			MenuSlot->SetAutoSize(true);
-		}
+		UButton* Menu = KeepersStyle::MakeButton(WidgetTree, FText::FromString(TEXT("В меню")), KeepersStyle::EButton::Secondary, 18);
+		Menu->OnClicked.AddDynamic(this, &UKeepersCampaignMapWidget::HandleMenuClicked);
+		BottomRow->AddChildToHorizontalBox(Menu)->SetVerticalAlignment(VAlign_Center);
 	}
 	return Super::RebuildWidget();
 }
@@ -400,6 +392,14 @@ int32 UKeepersCampaignMapWidget::NativePaint(const FPaintArgs& Args, const FGeom
 		}
 	}
 	return Layer + 1;
+}
+
+void UKeepersCampaignMapWidget::HandleMenuClicked()
+{
+	if (UKeepersCampaignSubsystem* Subsystem = UKeepersCampaignSubsystem::Get(this))
+	{
+		Subsystem->ReturnToMainMenu(this);
+	}
 }
 
 void UKeepersCampaignMapWidget::OnNodePicked(int32 NodeIndex)
@@ -509,10 +509,6 @@ void UKeepersCampaignWorldSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
-	if (!bMenuExtended)
-	{
-		TryExtendMainMenu();
-	}
 	if (!bMapShown && World->GetOutermost()->GetName().Contains(TEXT("L_CampaignMap")))
 	{
 		ShowMap();
@@ -522,102 +518,6 @@ void UKeepersCampaignWorldSubsystem::Tick(float DeltaTime)
 		EnsureObjective();
 	}
 	TickBattle();
-}
-
-void UKeepersCampaignWorldSubsystem::TryExtendMainMenu()
-{
-	UUserWidget* Menu = nullptr;
-	for (TObjectIterator<UUserWidget> It; It; ++It)
-	{
-		if (It->GetWorld() == GetWorld() && It->GetClass()->GetName() == TEXT("W_MainMenu_C") && It->IsInViewport())
-		{
-			Menu = *It;
-			break;
-		}
-	}
-	if (!Menu || !Menu->WidgetTree)
-	{
-		return;
-	}
-	bMenuExtended = true;
-
-	UGridPanel* Grid = Cast<UGridPanel>(Menu->WidgetTree->FindWidget(TEXT("GridPanel_104")));
-	const UButton* Reference = Cast<UButton>(Menu->WidgetTree->FindWidget(TEXT("Button_DebugMap")));
-	const UTextBlock* ReferenceText = Cast<UTextBlock>(Menu->WidgetTree->FindWidget(TEXT("Text_7")));
-	if (!Grid || !Reference)
-	{
-		UE_LOG(LogKeepersCampaignUI, Warning, TEXT("Main menu layout changed: campaign buttons not added"));
-		return;
-	}
-	const UGridSlot* ReferenceSlot = Cast<UGridSlot>(Reference->Slot);
-
-	int32 BottomRow = 3;
-	if (const UWidget* Quit = Menu->WidgetTree->FindWidget(TEXT("Button_Quit")))
-	{
-		if (const UGridSlot* QuitSlot = Cast<UGridSlot>(Quit->Slot))
-		{
-			BottomRow = QuitSlot->GetRow();
-		}
-	}
-
-	auto AddButton = [&](const TCHAR* Label, int32 Row, int32 Column, int32 Action)
-	{
-		UButton* Button = Menu->WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
-		Button->SetStyle(Reference->GetStyle());
-		Button->SetBackgroundColor(Reference->GetBackgroundColor());
-		Button->SetColorAndOpacity(Reference->GetColorAndOpacity());
-		UTextBlock* Text = Menu->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		if (ReferenceText)
-		{
-			Text->SetFont(ReferenceText->GetFont());
-			Text->SetColorAndOpacity(ReferenceText->GetColorAndOpacity());
-		}
-		Text->SetText(FText::FromString(Label));
-		Button->AddChild(Text);
-		if (UGridSlot* NewSlot = Grid->AddChildToGrid(Button, Row, Column))
-		{
-			if (ReferenceSlot)
-			{
-				NewSlot->SetPadding(ReferenceSlot->GetPadding());
-				NewSlot->SetHorizontalAlignment(ReferenceSlot->GetHorizontalAlignment());
-				NewSlot->SetVerticalAlignment(ReferenceSlot->GetVerticalAlignment());
-			}
-		}
-		switch (Action)
-		{
-		case 0: Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnCampaignClicked); break;
-		case 1: Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnContinueClicked); break;
-		default: Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnTutorialClicked); break;
-		}
-	};
-	AddButton(TEXT("Кампания"), 0, 1, 0);
-	if (UKeepersCampaignSubsystem::HasSavedCampaign())
-	{
-		AddButton(TEXT("Продолжить"), BottomRow, 0, 1);
-	}
-	AddButton(TEXT("Обучение"), BottomRow, 2, 2);
-	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Campaign buttons added to the main menu"));
-}
-
-void UKeepersCampaignWorldSubsystem::OnCampaignClicked()
-{
-	if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld()))
-	{
-		Campaign->StartNewCampaign();
-	}
-}
-
-void UKeepersCampaignWorldSubsystem::OnContinueClicked()
-{
-	if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld()))
-	{
-		Campaign->ContinueCampaign();
-	}
-}
-
-void UKeepersCampaignWorldSubsystem::OnTutorialClicked()
-{
-	UKeepersTutorialSubsystem::StartTutorial(GetWorld());
 }
 
 void UKeepersCampaignWorldSubsystem::EnsureObjective()

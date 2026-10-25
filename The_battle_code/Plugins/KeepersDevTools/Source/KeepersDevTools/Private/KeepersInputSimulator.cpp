@@ -2,7 +2,13 @@
 
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Framework/Application/SlateApplication.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "RenderingThread.h"
+#include "Slate/WidgetRenderer.h"
+#include "TextureResource.h"
 #include "GameFramework/PlayerController.h"
 #include "Widgets/SViewport.h"
 
@@ -128,6 +134,34 @@ bool UKeepersInputSimulator::ScrollWheel(UObject* WorldContext, float Delta)
 	FPointerEvent Wheel(0, Screen, Screen, TSet<FKey>(), EKeys::Invalid, Delta, FModifierKeysState());
 	FSlateApplication::Get().ProcessMouseWheelOrGestureEvent(Wheel, nullptr);
 	return true;
+}
+
+bool UKeepersInputSimulator::SaveViewportUI(UObject* WorldContext, const FString& Path, int32 Width, int32 Height)
+{
+	TSharedPtr<SViewport> Viewport = KeepersInputSim::GetViewportWidget(WorldContext);
+	TSharedPtr<SWidget> Layer = Viewport.IsValid() ? Viewport->GetContent() : nullptr;
+	if (!Layer.IsValid())
+	{
+		return false;
+	}
+	UTextureRenderTarget2D* Target = NewObject<UTextureRenderTarget2D>();
+	Target->ClearColor = FLinearColor::Transparent;
+	Target->InitCustomFormat(Width, Height, PF_B8G8R8A8, false);
+	Target->UpdateResourceImmediate(true);
+
+	FWidgetRenderer Renderer(false, false);
+	Renderer.DrawWidget(Target, Layer.ToSharedRef(), FVector2D(Width, Height), 0.f);
+	FlushRenderingCommands();
+
+	TArray<FColor> Pixels;
+	FTextureRenderTargetResource* Resource = Target->GameThread_GetRenderTargetResource();
+	if (!Resource || !Resource->ReadPixels(Pixels) || Pixels.Num() != Width * Height)
+	{
+		return false;
+	}
+	TArray64<uint8> Png;
+	FImageUtils::PNGCompressImageArray(Width, Height, TArrayView64<const FColor>(Pixels.GetData(), Pixels.Num()), Png);
+	return FFileHelper::SaveArrayToFile(Png, *Path);
 }
 
 bool UKeepersInputSimulator::SetKey(FName KeyName, bool bDown)
