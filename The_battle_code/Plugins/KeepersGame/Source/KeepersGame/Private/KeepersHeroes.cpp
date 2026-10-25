@@ -518,6 +518,8 @@ UTextureRenderTarget2D* UKeepersHeroLookSubsystem::GetPortrait(FName HeroId, boo
 		USceneComponent* Root = NewObject<USceneComponent>(Studio, TEXT("Root"));
 		Studio->SetRootComponent(Root);
 		Root->RegisterComponent();
+		// A bare actor has no root at spawn, so its spawn location is lost: place it now.
+		Studio->SetActorLocation(FVector(0.f, 0.f, 9000.f));
 		UPointLightComponent* Light = NewObject<UPointLightComponent>(Studio);
 		Light->SetupAttachment(Root);
 		Light->SetRelativeLocation(FVector(-300.f, -500.f, 350.f));

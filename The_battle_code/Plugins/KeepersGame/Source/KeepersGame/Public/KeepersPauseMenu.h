@@ -4,6 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "KeepersPauseMenu.generated.h"
 
+class UBorder;
 class UVerticalBox;
 class UTextBlock;
 class UKeepersFnButton;
@@ -27,9 +28,14 @@ private:
 	void ToMainMenu();
 	void Quit();
 
+	/** A question over the pause menu: Yes runs the action, No closes the question. */
+	void Ask(const TCHAR* Question, const TCHAR* Details, const TCHAR* Yes, const TCHAR* No, TFunction<void()> Action);
+	void CloseQuestion();
+	/** Stops every actor's tick, so nothing in the level runs once its player is gone. */
+	void FreezeLevel();
+
 	bool bSettings = false;
-	bool bQuitAsked = false;
-	bool bMenuAsked = false;
+	TFunction<void()> QuestionAction;
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> List;
@@ -39,6 +45,21 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> Note;
+
+	UPROPERTY()
+	TObjectPtr<UBorder> Question;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> QuestionTitle;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> QuestionText;
+
+	UPROPERTY()
+	TObjectPtr<UKeepersFnButton> QuestionYes;
+
+	UPROPERTY()
+	TObjectPtr<UKeepersFnButton> QuestionNo;
 };
 
 /**

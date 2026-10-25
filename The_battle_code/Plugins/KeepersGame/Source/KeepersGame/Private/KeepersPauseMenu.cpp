@@ -4,6 +4,8 @@
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -71,6 +73,49 @@ TSharedRef<SWidget> UKeepersPauseWidget::RebuildWidget()
 		PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 		PanelSlot->SetAutoSize(true);
 
+		// The question layer: darkens the pause menu and asks over it.
+		Question = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Question->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.55f));
+		Question->SetHorizontalAlignment(HAlign_Center);
+		Question->SetVerticalAlignment(VAlign_Center);
+		Question->SetVisibility(ESlateVisibility::Collapsed);
+		UBorder* QuestionPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		QuestionPanel->SetBrush(KeepersStyle::Panel(KeepersStyle::InkLight, 16.f, KeepersStyle::Gold, 2.f));
+		QuestionPanel->SetPadding(FMargin(44.f, 30.f, 44.f, 32.f));
+		UVerticalBox* QuestionColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		QuestionTitle = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Heading(38), KeepersStyle::Gold);
+		QuestionTitle->SetJustification(ETextJustify::Center);
+		QuestionColumn->AddChildToVerticalBox(QuestionTitle)->SetHorizontalAlignment(HAlign_Center);
+		QuestionText = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Body(16), KeepersStyle::Text, true);
+		QuestionText->SetJustification(ETextJustify::Center);
+		USizeBox* QuestionTextSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		QuestionTextSize->SetWidthOverride(440.f);
+		QuestionTextSize->AddChild(QuestionText);
+		UVerticalBoxSlot* QuestionTextSlot = QuestionColumn->AddChildToVerticalBox(QuestionTextSize);
+		QuestionTextSlot->SetHorizontalAlignment(HAlign_Center);
+		QuestionTextSlot->SetPadding(FMargin(0.f, 10.f, 0.f, 24.f));
+		UHorizontalBox* QuestionButtons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		TWeakObjectPtr<UKeepersPauseWidget> WeakThis(this);
+		QuestionYes = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
+		QuestionYes->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Danger, 22, [WeakThis]()
+		{
+			if (WeakThis.IsValid() && WeakThis->QuestionAction)
+			{
+				TFunction<void()> Action = WeakThis->QuestionAction;
+				Action();
+			}
+		}, 220.f);
+		QuestionButtons->AddChildToHorizontalBox(QuestionYes)->SetPadding(FMargin(0.f, 0.f, 14.f, 0.f));
+		QuestionNo = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
+		QuestionNo->Setup(FText::GetEmpty(), UKeepersFnButton::EKind::Primary, 22, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->CloseQuestion(); } }, 220.f);
+		QuestionButtons->AddChildToHorizontalBox(QuestionNo);
+		QuestionColumn->AddChildToVerticalBox(QuestionButtons)->SetHorizontalAlignment(HAlign_Center);
+		QuestionPanel->SetContent(QuestionColumn);
+		Question->SetContent(QuestionPanel);
+		UCanvasPanelSlot* QuestionSlot = Canvas->AddChildToCanvas(Question);
+		QuestionSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+		QuestionSlot->SetOffsets(FMargin(0.f));
+
 		ShowMain();
 	}
 	return Super::RebuildWidget();
@@ -79,8 +124,6 @@ TSharedRef<SWidget> UKeepersPauseWidget::RebuildWidget()
 void UKeepersPauseWidget::ShowMain()
 {
 	bSettings = false;
-	bQuitAsked = false;
-	bMenuAsked = false;
 	List->ClearChildren();
 	Title->SetText(KeepersPause::T(TEXT("Пауза")));
 	const bool bCampaign = UKeepersCampaignSubsystem::Get(this) && UKeepersCampaignSubsystem::Get(this)->IsActive();
@@ -115,35 +158,72 @@ void UKeepersPauseWidget::ShowSettings()
 
 void UKeepersPauseWidget::ToMainMenu()
 {
-	if (!bMenuAsked)
+	const bool bCampaign = UKeepersCampaignSubsystem::Get(this) && UKeepersCampaignSubsystem::Get(this)->IsActive();
+	TWeakObjectPtr<UKeepersPauseWidget> WeakThis(this);
+	Ask(TEXT("Вернуться к костру?"),
+		bCampaign ? TEXT("Этот бой придётся начать заново, но поход не пропадёт: продолжите его из главного меню.")
+			: TEXT("Этот бой не сохранится."),
+		TEXT("Да, к костру"), TEXT("Нет, остаюсь"), [WeakThis]()
 	{
-		// Ask once: the battle in progress is lost.
-		bMenuAsked = true;
-		Note->SetText(KeepersPause::T(TEXT("Текущий бой не сохранится. Нажмите «В главное меню» ещё раз.")));
-		Note->SetColorAndOpacity(FSlateColor(KeepersStyle::Gold));
-		return;
-	}
-	UGameplayStatics::SetGamePaused(this, false);
-	if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(this); Campaign && Campaign->IsActive())
-	{
-		Campaign->ReturnToMainMenu(this);
-	}
-	else
-	{
-		KeepersLoading::OpenLevel(this, UKeepersCampaignSubsystem::MainMenuLevel);
-	}
+		if (!WeakThis.IsValid())
+		{
+			return;
+		}
+		WeakThis->FreezeLevel();
+		if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get()); Campaign && Campaign->IsActive())
+		{
+			Campaign->ReturnToMainMenu(WeakThis.Get());
+		}
+		else
+		{
+			KeepersLoading::OpenLevel(WeakThis.Get(), UKeepersCampaignSubsystem::MainMenuLevel);
+		}
+	});
 }
 
 void UKeepersPauseWidget::Quit()
 {
-	if (!bQuitAsked)
+	TWeakObjectPtr<UKeepersPauseWidget> WeakThis(this);
+	Ask(TEXT("Покинуть игру?"), TEXT("Хранители подождут у костра. Текущий бой не сохранится."),
+		TEXT("Да, бежать"), TEXT("Нет, остаюсь"), [WeakThis]()
 	{
-		bQuitAsked = true;
-		Note->SetText(KeepersPause::T(TEXT("Точно выйти? Нажмите «Выйти из игры» ещё раз.")));
-		Note->SetColorAndOpacity(FSlateColor(KeepersStyle::Gold));
-		return;
+		if (WeakThis.IsValid())
+		{
+			WeakThis->FreezeLevel();
+			UKismetSystemLibrary::QuitGame(WeakThis.Get(), WeakThis->GetOwningPlayer(), EQuitPreference::Quit, false);
+		}
+	});
+}
+
+void UKeepersPauseWidget::Ask(const TCHAR* InQuestion, const TCHAR* Details, const TCHAR* Yes, const TCHAR* No, TFunction<void()> Action)
+{
+	QuestionAction = MoveTemp(Action);
+	QuestionTitle->SetText(KeepersPause::T(InQuestion));
+	QuestionText->SetText(KeepersPause::T(Details));
+	QuestionYes->SetLabel(KeepersPause::T(Yes));
+	QuestionNo->SetLabel(KeepersPause::T(No));
+	Question->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UKeepersPauseWidget::CloseQuestion()
+{
+	QuestionAction = nullptr;
+	Question->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UKeepersPauseWidget::FreezeLevel()
+{
+	// The Blueprints of the grid and the player actions ask for the player controller every tick;
+	// on the way out it is already gone.
+	if (UWorld* World = GetWorld())
+	{
+		// Unpaused, so the loading screen's timer runs.
+		UGameplayStatics::SetGamePaused(World, false);
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			It->SetActorTickEnabled(false);
+		}
 	}
-	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 
 FReply UKeepersPauseWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
@@ -151,7 +231,11 @@ FReply UKeepersPauseWidget::NativeOnKeyDown(const FGeometry& InGeometry, const F
 	const FKey Key = InKeyEvent.GetKey();
 	if (Key == EKeys::Escape || Key == EKeys::P || Key == EKeys::F10)
 	{
-		if (bSettings)
+		if (Question && Question->GetVisibility() == ESlateVisibility::Visible)
+		{
+			CloseQuestion();
+		}
+		else if (bSettings)
 		{
 			ShowMain();
 		}
