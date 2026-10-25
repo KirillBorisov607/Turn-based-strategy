@@ -914,6 +914,43 @@ void UKeepersCampaignWorldSubsystem::ApplyArtifactsAtBattleStart(UObject* Combat
 				KeepersReflection::AddUnitStat(Hero, TEXT("MP_Current"), Boots);
 			}
 		}
+		// Relics for one hero or for all.
+		const FKeepersHeroDef* Def = KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Hero));
+		const FName Id = Def ? Def->Id : NAME_None;
+		auto AddHp = [Hero](int32 Amount)
+		{
+			KeepersReflection::AddUnitStat(Hero, TEXT("HP_Max"), Amount);
+			KeepersReflection::FCall Heal(Hero, TEXT("ModifyCurrentHp"));
+			Heal.Set<int32>(TEXT("Modifier"), Amount);
+			Heal.Set<bool>(TEXT("ShowNumber"), false);
+			Heal.Call();
+		};
+		auto AddStat = [Hero](const TCHAR* Max, const TCHAR* Current, int32 Amount)
+		{
+			KeepersReflection::AddUnitStat(Hero, Max, Amount);
+			KeepersReflection::AddUnitStat(Hero, Current, Amount);
+		};
+		if (Campaign->HasArtifact(TEXT("WarDrum")))
+		{
+			AddStat(TEXT("AP_Max"), TEXT("AP_Current"), 1);
+		}
+		if (Campaign->HasArtifact(TEXT("VeteranCloak")) && Id == TEXT("Warrior"))
+		{
+			AddHp(10);
+		}
+		if (Campaign->HasArtifact(TEXT("HawkFeather")) && Id == TEXT("Ranger"))
+		{
+			AddStat(TEXT("AP_Max"), TEXT("AP_Current"), 1);
+			AddStat(TEXT("MP_Max"), TEXT("MP_Current"), 1);
+		}
+		if (Campaign->HasArtifact(TEXT("DruidAcorn")) && Id == TEXT("Priest"))
+		{
+			AddHp(8);
+		}
+		if (Campaign->HasArtifact(TEXT("SwiftCharm")) && (Id == TEXT("Priest") || Id == TEXT("Warrior")))
+		{
+			AddStat(TEXT("MP_Max"), TEXT("MP_Current"), 1);
+		}
 		if (Campaign->HasArtifact(TEXT("RangerBoots")))
 		{
 			KeepersReflection::AddUnitStat(Hero, TEXT("MP_Max"), 1);
@@ -935,17 +972,25 @@ void UKeepersCampaignWorldSubsystem::OnRoundStarted(UObject* CombatSystem)
 {
 	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
 	const UKeepersTerrainSubsystem* Terrain = GetWorld()->GetSubsystem<UKeepersTerrainSubsystem>();
-	if (!Campaign->HasArtifact(TEXT("WorldTreeRoot")) || !Terrain)
+	const bool bRoot = Campaign->HasArtifact(TEXT("WorldTreeRoot")) && Terrain;
+	const bool bEmber = Campaign->HasArtifact(TEXT("CampEmber"));
+	if (!bRoot && !bEmber)
 	{
 		return;
 	}
 	for (UObject* Hero : KeepersUI::Heroes(CombatSystem))
 	{
 		FIntPoint Index;
-		if (KeepersReflection::GetIntPoint(Hero->GetClass(), Hero, TEXT("Index"), Index) && Terrain->IsForest(Index))
+		const bool bInForest = bRoot && KeepersReflection::GetIntPoint(Hero->GetClass(), Hero, TEXT("Index"), Index) && Terrain->IsForest(Index);
+		const int32 Amount = (bInForest ? 2 : 0) + (bEmber ? 1 : 0);
+		int32 Hp = 0;
+		int32 HpMax = 0;
+		KeepersReflection::GetUnitStat(Hero, TEXT("HP_Current"), Hp);
+		KeepersReflection::GetUnitStat(Hero, TEXT("HP_Max"), HpMax);
+		if (Amount > 0 && Hp > 0 && Hp < HpMax)
 		{
 			KeepersReflection::FCall Heal(Hero, TEXT("ModifyCurrentHp"));
-			Heal.Set<int32>(TEXT("Modifier"), 2);
+			Heal.Set<int32>(TEXT("Modifier"), FMath::Min(Amount, HpMax - Hp));
 			Heal.Set<bool>(TEXT("ShowNumber"), true);
 			Heal.Call();
 		}

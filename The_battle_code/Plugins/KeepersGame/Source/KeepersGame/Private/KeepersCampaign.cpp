@@ -51,6 +51,14 @@ const TArray<FKeepersArtifact>& UKeepersCampaignSubsystem::GetAllArtifacts()
 			Make(TEXT("ShepherdBell"), TEXT("Колокольчик пастуха"), TEXT("Вражеские куры больше не зовут подмогу.")),
 			Make(TEXT("SaltyBiscuit"), TEXT("Солёная галета"), TEXT("Слизни больше не делятся. Они просто грустят.")),
 			Make(TEXT("OakHeart"), TEXT("Сердце дуба"), TEXT("Росток лечит союзника на выбранной клетке на 3.")),
+			Make(TEXT("WarDrum"), TEXT("Боевой барабан"), TEXT("+1 к очкам действия всех героев.")),
+			Make(TEXT("VeteranCloak"), TEXT("Плащ ветерана"), TEXT("Страж получает +10 к здоровью.")),
+			Make(TEXT("HawkFeather"), TEXT("Перо ястреба"), TEXT("Следопыт получает +1 к очкам действия и +1 к движению.")),
+			Make(TEXT("DruidAcorn"), TEXT("Жёлудь друида"), TEXT("Друид получает +8 к здоровью.")),
+			Make(TEXT("CampEmber"), TEXT("Уголёк костра"), TEXT("В начале каждого раунда все герои лечатся на 1.")),
+			Make(TEXT("LuckyCoin"), TEXT("Монетка удачи"), TEXT("+10 золота за каждый выигранный бой.")),
+			Make(TEXT("GloryBanner"), TEXT("Знамя славы"), TEXT("Слава за бои удваивается.")),
+			Make(TEXT("SwiftCharm"), TEXT("Оберег быстроты"), TEXT("Друид и Страж получают +1 к движению.")),
 		};
 	}();
 	return Artifacts;
@@ -428,12 +436,16 @@ void UKeepersCampaignSubsystem::CompleteCurrentNode()
 	Save->VisitedNodes.AddUnique(Save->CurrentNode);
 	// An event that became a fight pays like a battle.
 	const bool bEventFight = Save->Nodes[Save->CurrentNode].Type == EKeepersNodeType::Event && !Save->Nodes[Save->CurrentNode].Level.IsNone();
-	AddGold(bEventFight ? GoldFor(EKeepersNodeType::Battle) : GoldFor(Save->Nodes[Save->CurrentNode].Type));
+	const int32 Earned = bEventFight ? GoldFor(EKeepersNodeType::Battle) : GoldFor(Save->Nodes[Save->CurrentNode].Type);
+	const EKeepersNodeType NodeType = Save->Nodes[Save->CurrentNode].Type;
+	const bool bBattle = bEventFight || NodeType == EKeepersNodeType::Battle || NodeType == EKeepersNodeType::Elite || NodeType == EKeepersNodeType::Boss;
+	AddGold(Earned + (bBattle && HasArtifact(TEXT("LuckyCoin")) ? 10 : 0));
 	// Glory for every won battle: more for elites and the boss.
 	if (UKeepersPartySubsystem* Party = GetGameInstance()->GetSubsystem<UKeepersPartySubsystem>())
 	{
 		const EKeepersNodeType Type = Save->Nodes[Save->CurrentNode].Type;
-		Party->AddGlory(Type == EKeepersNodeType::Boss ? 40 : Type == EKeepersNodeType::Elite ? 12 : Type == EKeepersNodeType::Battle || bEventFight ? 6 : 0);
+		const int32 Glory = Type == EKeepersNodeType::Boss ? 40 : Type == EKeepersNodeType::Elite ? 12 : Type == EKeepersNodeType::Battle || bEventFight ? 6 : 0;
+		Party->AddGlory(HasArtifact(TEXT("GloryBanner")) ? Glory * 2 : Glory);
 	}
 	if (IsBossNode(Save->CurrentNode))
 	{
