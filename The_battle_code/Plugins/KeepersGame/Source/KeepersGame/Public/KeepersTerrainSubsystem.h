@@ -47,6 +47,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Terrain")
 	bool PushUnit(UObject* CombatSystem, FIntPoint Origin, FIntPoint Target);
 
+	/** Sets a tile's E_TileType through BP_Grid.AddGridTile; returns the tile transform. */
+	static bool SetTileType(UObject* Grid, const FIntPoint& Index, uint8 Type, FTransform& OutTransform);
+
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
@@ -56,9 +59,6 @@ private:
 
 	UFUNCTION()
 	void OnTerrainAnimationDestroyed(AActor* Animation);
-
-	/** Sets a tile's E_TileType through BP_Grid.AddGridTile; returns the tile transform. */
-	static bool SetTileType(UObject* Grid, const FIntPoint& Index, uint8 Type, FTransform& OutTransform);
 
 	/** Damages a unit and lets the combat system process its death. */
 	static void DamageUnit(UObject* CombatSystem, UObject* Unit, int32 Amount);
