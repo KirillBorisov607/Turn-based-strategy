@@ -14,8 +14,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogKeepersTerrain, Log, All);
 namespace KeepersTerrain
 {
 	static const FString RaiseRockAnimation = TEXT("BP_SpellAnim_RaiseRock");
-	static const FString GustAnimation = TEXT("BP_SpellAnim_Gust");
+	/** Spell animations whose hit pushes the target. */
+	static const TArray<FString> PushAnimations = { TEXT("BP_SpellAnim_Gust"), TEXT("BP_SpellAnim_ShieldBash") };
 	static const FString SproutAnimation = TEXT("BP_SpellAnim_Sprout");
+	static const FString RootsAnimation = TEXT("BP_SpellAnim_Roots");
 	static const FString CombatSystemClass = TEXT("BP_CombatSystem_C");
 
 	/** E_TileType values. */
@@ -162,13 +164,17 @@ void UKeepersTerrainSubsystem::OnActorSpawned(AActor* Actor)
 	{
 		PendingEffects.Add(Actor, EKeepersTerrainEffect::RaiseRock);
 	}
-	else if (ClassName.StartsWith(KeepersTerrain::GustAnimation))
+	else if (KeepersTerrain::PushAnimations.ContainsByPredicate([&ClassName](const FString& Prefix) { return ClassName.StartsWith(Prefix); }))
 	{
 		PendingEffects.Add(Actor, EKeepersTerrainEffect::Push);
 	}
 	else if (ClassName.StartsWith(KeepersTerrain::SproutAnimation))
 	{
 		PendingEffects.Add(Actor, EKeepersTerrainEffect::Sprout);
+	}
+	else if (ClassName.StartsWith(KeepersTerrain::RootsAnimation))
+	{
+		PendingEffects.Add(Actor, EKeepersTerrainEffect::Roots);
 	}
 	else
 	{
@@ -215,6 +221,15 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 		break;
 	case EKeepersTerrainEffect::Push:
 		PushUnit(KeepersTerrain::FindCombatSystem(GetWorld()), Origin, Target);
+		break;
+	case EKeepersTerrainEffect::Roots:
+		if (UObject* Rooted = KeepersTerrain::GetUnitOnTile(Grid, Target))
+		{
+			KeepersReflection::FCall SetMp(Rooted, TEXT("SetCurrentMp"));
+			SetMp.Set<int32>(TEXT("Mp"), 0);
+			SetMp.Set<bool>(TEXT("ShowNumber"), false);
+			SetMp.Call();
+		}
 		break;
 	case EKeepersTerrainEffect::Sprout:
 		if (GrowForest(Grid, Target))

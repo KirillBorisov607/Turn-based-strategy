@@ -10,7 +10,8 @@ enum class EKeepersTerrainEffect : uint8
 {
 	RaiseRock,
 	Push,
-	Sprout
+	Sprout,
+	Roots
 };
 
 /**
@@ -20,11 +21,13 @@ enum class EKeepersTerrainEffect : uint8
  * When BP_CombatSystem.CastSpell spawns one of the animations below, this subsystem waits until the
  * animation has hit (it destroys itself) and then applies the effect at its TargetIndex:
  *  - BP_SpellAnim_RaiseRock: the empty target tile becomes a stone column (Obstacle).
- *  - BP_SpellAnim_Gust: the unit on the target tile is pushed one tile away from the caster.
+ *  - BP_SpellAnim_Gust, BP_SpellAnim_ShieldBash: the unit on the target tile is pushed one tile away
+ *    from the caster.
  *    Blocked by a rock, a unit or the edge: 1 damage (and 1 to the unit it bumps into).
  *    Pushed over a chasm it cannot stand on: it falls and dies.
  *  - BP_SpellAnim_Sprout: the target tile becomes forest (DoubleCost). An empty tile grows a tree that
  *    blocks line of sight; an occupied tile grows a bush.
+ *  - BP_SpellAnim_Roots: the target's MP (already cut by the spell) is set to exactly 0 for its next turn.
  */
 UCLASS()
 class KEEPERSGAME_API UKeepersTerrainSubsystem : public UWorldSubsystem
