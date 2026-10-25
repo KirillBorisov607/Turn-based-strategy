@@ -149,13 +149,16 @@ void UKeepersCampaignSubsystem::GenerateMap(int32 Seed)
 			}
 			else if (Column == KeepersCampaign::ColumnCount - 2)
 			{
-				Node.Type = Row == 0 ? EKeepersNodeType::Camp : (Random.FRand() < 0.5f ? EKeepersNodeType::Ruins : EKeepersNodeType::Battle);
+				const float Roll = Random.FRand();
+				Node.Type = Row == 0 ? EKeepersNodeType::Camp
+					: Roll < 0.35f ? EKeepersNodeType::Ruins : Roll < 0.6f ? EKeepersNodeType::Event : EKeepersNodeType::Battle;
 			}
 			else
 			{
 				const float Roll = Random.FRand();
-				Node.Type = Roll < 0.5f ? EKeepersNodeType::Battle
-					: Roll < 0.7f ? EKeepersNodeType::Ruins
+				Node.Type = Roll < 0.45f ? EKeepersNodeType::Battle
+					: Roll < 0.58f ? EKeepersNodeType::Ruins
+					: Roll < 0.72f ? EKeepersNodeType::Event
 					: Roll < 0.85f ? EKeepersNodeType::Camp
 					: (Column >= 2 ? EKeepersNodeType::Elite : EKeepersNodeType::Battle);
 			}
@@ -246,8 +249,9 @@ bool UKeepersCampaignSubsystem::IsInBattleNode() const
 	{
 		return false;
 	}
-	const EKeepersNodeType Type = Save->Nodes[Save->CurrentNode].Type;
-	return Type == EKeepersNodeType::Battle || Type == EKeepersNodeType::Elite || Type == EKeepersNodeType::Boss;
+	const FKeepersMapNode& Node = Save->Nodes[Save->CurrentNode];
+	return Node.Type == EKeepersNodeType::Battle || Node.Type == EKeepersNodeType::Elite || Node.Type == EKeepersNodeType::Boss
+		|| (Node.Type == EKeepersNodeType::Event && !Node.Level.IsNone());
 }
 
 bool UKeepersCampaignSubsystem::IsBossNode(int32 NodeIndex) const
@@ -362,6 +366,40 @@ bool UKeepersCampaignSubsystem::UpgradeGear(FName Hero, EKeepersGear Gear)
 	return true;
 }
 
+bool UKeepersCampaignSubsystem::GrantGear(FName Hero, EKeepersGear Gear)
+{
+	const int32 Next = GetGearRank(Hero, Gear) + 1;
+	if (!Save || Next > MaxGearRank(Gear))
+	{
+		return false;
+	}
+	(Gear == EKeepersGear::Armor ? Save->ArmorRanks : Save->BootsRanks).Add(Hero, Next);
+	WriteSave();
+	return true;
+}
+
+void UKeepersCampaignSubsystem::StartEventBattle(bool bMercenaries)
+{
+	if (!Save || !Save->Nodes.IsValidIndex(Save->CurrentNode))
+	{
+		return;
+	}
+	TArray<FName> Battles = KeepersCampaign::BattleLevels;
+	for (const FKeepersLevelRow* Row : KeepersLevelKit::GetRows())
+	{
+		if (Row->Kind == EKeepersLevelKind::Battle)
+		{
+			Battles.AddUnique(FName(Row->Level.ToSoftObjectPath().GetLongPackageName()));
+		}
+	}
+	FKeepersMapNode& Node = Save->Nodes[Save->CurrentNode];
+	Node.Level = Battles[FMath::RandRange(0, Battles.Num() - 1)];
+	WriteSave();
+	bMercenaryQuickBattle = bMercenaries;
+	UE_LOG(LogKeepersCampaign, Log, TEXT("Event at node %d becomes a fight on %s"), Save->CurrentNode, *Node.Level.ToString());
+	OpenLevel(Node.Level);
+}
+
 void UKeepersCampaignSubsystem::SetMercenaryBattle(const UObject* WorldContextObject, bool bEnabled)
 {
 	if (UKeepersCampaignSubsystem* Campaign = Get(WorldContextObject))
@@ -388,12 +426,14 @@ void UKeepersCampaignSubsystem::CompleteCurrentNode()
 		return;
 	}
 	Save->VisitedNodes.AddUnique(Save->CurrentNode);
-	AddGold(GoldFor(Save->Nodes[Save->CurrentNode].Type));
+	// An event that became a fight pays like a battle.
+	const bool bEventFight = Save->Nodes[Save->CurrentNode].Type == EKeepersNodeType::Event && !Save->Nodes[Save->CurrentNode].Level.IsNone();
+	AddGold(bEventFight ? GoldFor(EKeepersNodeType::Battle) : GoldFor(Save->Nodes[Save->CurrentNode].Type));
 	// Glory for every won battle: more for elites and the boss.
 	if (UKeepersPartySubsystem* Party = GetGameInstance()->GetSubsystem<UKeepersPartySubsystem>())
 	{
 		const EKeepersNodeType Type = Save->Nodes[Save->CurrentNode].Type;
-		Party->AddGlory(Type == EKeepersNodeType::Boss ? 40 : Type == EKeepersNodeType::Elite ? 12 : Type == EKeepersNodeType::Battle ? 6 : 0);
+		Party->AddGlory(Type == EKeepersNodeType::Boss ? 40 : Type == EKeepersNodeType::Elite ? 12 : Type == EKeepersNodeType::Battle || bEventFight ? 6 : 0);
 	}
 	if (IsBossNode(Save->CurrentNode))
 	{

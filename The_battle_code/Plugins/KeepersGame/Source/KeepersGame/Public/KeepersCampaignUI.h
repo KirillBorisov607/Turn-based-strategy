@@ -23,6 +23,8 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 
 private:
+	friend class UKeepersChoiceWidget;
+
 	UFUNCTION()
 	void HandleClicked();
 
@@ -54,6 +56,9 @@ public:
 
 	void Setup(const FText& Title, const FText& Subtitle, TArray<FOption> Options);
 
+	/** Test hook: picks option Index as a click would. */
+	void TestPick(int32 Index);
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 
@@ -61,6 +66,8 @@ private:
 	FText TitleText;
 	FText SubtitleText;
 	TArray<FOption> PendingOptions;
+	UPROPERTY()
+	TArray<TObjectPtr<UKeepersOptionButton>> Cards;
 };
 
 /** The region map: nodes in columns, roads between them, artifacts owned. */
@@ -75,8 +82,13 @@ protected:
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
 private:
+	friend class UKeepersCampaignWorldSubsystem;
+
 	void OnNodePicked(int32 NodeIndex);
 	void ShowArtifactChoice(const FText& Title, const FText& Subtitle, int32 Count);
+
+	/** An event node: an encounter with a choice and its consequence (see KeepersEvents). */
+	void ShowEvent(int32 NodeIndex);
 	FVector2D NodeAnchor(int32 NodeIndex) const;
 
 	UFUNCTION()
@@ -108,7 +120,10 @@ public:
 	/** The camp node: smith, merchant, rest. */
 	void ShowCamp();
 
-	/** Test hook: "open" the camp, "armor" / "boots" for squad member Index, "buy" offer Index, "leave". */
+	/**
+	 * Test hook: "open" the camp, "armor" / "boots" for squad member Index, "buy" offer Index, "leave";
+	 * "pick" — node Index on the map, as a click; "event" — the encounter of node Index; "choose" — option Index of the open choice panel.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "Keepers", meta = (WorldContext = "WorldContextObject"))
 	static void TestCamp(const UObject* WorldContextObject, const FString& Action, int32 Index);
 

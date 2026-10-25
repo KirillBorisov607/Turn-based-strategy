@@ -26,6 +26,11 @@
 | `load_preview.py`, `pause_toggle.py` | Показать экран загрузки карты из `load_level.txt`; открыть/закрыть меню паузы |
 | `tt_lineup.py`, `capture.py`, `vshot.sh` | Ряды частей Toony Tiny RTS Set для выбора обликов, снимок редактора через SceneCapture |
 
+| `record.sh <карта> <имя> <сек> "<шаги>"` | Запись ролика в отдельном окне игры через `KeepersDirector`: кадры 30 к/с с интерфейсом в `_logs/rec/<имя>`. Шаги: `0.2:autoplay;0.2:follow;0.2:speed=2.5`, `1:squad;3:squadhero=Warrior,0`, `4.5:newcampaign`, `orbit`, `view=x,y,z,pitch,yaw,fov` (полный список — в `KeepersDirector.h`) |
+| `make_trailer.py [out.mp4]` | Склейка трейлера из записанных клипов: титры, подписи, переходы (OpenCV + PIL) |
+| `edit_ai_score.py` | Правка `BP_UnitAi`: оценка удара идёт через `KeepersAiLibrary.AdjustPlanScore` (тактика врагов) |
+| `kit_test.py`, `kit_check.py` | Конструктор уровней: создать уровень боя из шаблона и проверить его |
+
 Пример полной проверки боя:
 
 ```bash

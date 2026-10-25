@@ -8,7 +8,6 @@
 #include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
 #include "KeepersStyle.h"
-#include "MoviePlayer.h"
 #include "Styling/CoreStyle.h"
 #include "TimerManager.h"
 #include "UObject/UObjectGlobals.h"
@@ -389,15 +388,8 @@ void UKeepersLoadingSubsystem::PreviewLoadingScreen(const UObject* WorldContextO
 
 void UKeepersLoadingSubsystem::HandlePreLoadMap(const FString& MapName)
 {
-	// Packaged game: the movie player keeps the screen alive (and the spinner turning) during the load.
-	if (bTravelling && !GIsEditor && IsMoviePlayerEnabled())
-	{
-		FLoadingScreenAttributes Attributes;
-		Attributes.bAutoCompleteWhenLoadingCompletes = true;
-		Attributes.MinimumLoadingScreenDisplayTime = 1.2f;
-		Attributes.WidgetLoadingScreen = BuildWidget(PendingLevel);
-		GetMoviePlayer()->SetupLoadingScreen(Attributes);
-	}
+	// The screen shown before the travel stays on the last frame while the level loads (a fraction of a second).
+	// The movie player is not used: outside the editor it hung the game on the first level change.
 }
 
 void UKeepersLoadingSubsystem::HandlePostLoadMap(UWorld* World)

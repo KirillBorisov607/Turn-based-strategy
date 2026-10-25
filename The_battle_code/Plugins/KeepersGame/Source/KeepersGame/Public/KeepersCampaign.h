@@ -12,7 +12,9 @@ enum class EKeepersNodeType : uint8
 	Elite,
 	Ruins,
 	Camp,
-	Boss
+	Boss,
+	/** An encounter with a choice: gold, relics, gear, glory — or a fight. */
+	Event
 };
 
 /** One node of the region map. */
@@ -144,6 +146,7 @@ public:
 	const TArray<FKeepersMapNode>& GetNodes() const { return Save->Nodes; }
 	const TArray<int32>& GetVisitedNodes() const { return Save->VisitedNodes; }
 	int32 GetCurrentNode() const { return Save->CurrentNode; }
+	int32 GetSeed() const { return Save ? Save->Seed : 0; }
 	bool IsInBattleNode() const;
 	bool IsBossNode(int32 NodeIndex) const;
 
@@ -172,6 +175,12 @@ public:
 	static int32 ArmorHpPerRank() { return 6; }
 	/** Buys the next rank; false when maxed or too poor. */
 	bool UpgradeGear(FName Hero, EKeepersGear Gear);
+
+	/** Gives the next rank for free (events); false when maxed. */
+	bool GrantGear(FName Hero, EKeepersGear Gear);
+
+	/** An event turned into a fight: the current node gets a battle level and opens it. */
+	void StartEventBattle(bool bMercenaries);
 
 	/** Price of an artifact at the camp's merchant. */
 	static int32 ArtifactPrice() { return 45; }

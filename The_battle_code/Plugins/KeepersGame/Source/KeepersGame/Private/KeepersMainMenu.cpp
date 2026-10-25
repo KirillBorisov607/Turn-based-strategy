@@ -933,8 +933,8 @@ void AKeepersMenuScene::BuildSquadStage()
 	PodiumLight->SetVisibility(false);
 	PodiumLight->RegisterComponent();
 
-	// A slime to show abilities on, to the right of the hero and further from the camera.
-	TargetLocation = PodiumLocation + Right * 80.f - ToCamera * 110.f;
+	// A slime to show abilities on, to the right of the hero: the hero turns side-on to strike, not away.
+	TargetLocation = PodiumLocation + Right * 130.f - ToCamera * 25.f;
 	TargetLocation.Z = GroundZ(TargetLocation);
 	TargetSlime = AddUnit(TEXT("Slime"), TargetLocation - CampCenter, 0.f, 0.32f);
 	if (TargetSlime)

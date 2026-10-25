@@ -57,6 +57,7 @@ namespace KeepersUI
 		case EKeepersNodeType::Ruins: return FLinearColor(0.16f, 0.32f, 0.55f);
 		case EKeepersNodeType::Camp: return FLinearColor(0.6f, 0.38f, 0.1f);
 		case EKeepersNodeType::Boss: return FLinearColor(0.35f, 0.05f, 0.05f);
+		case EKeepersNodeType::Event: return FLinearColor(0.18f, 0.45f, 0.35f);
 		}
 		return FLinearColor::Gray;
 	}
@@ -70,6 +71,7 @@ namespace KeepersUI
 		case EKeepersNodeType::Ruins: return FText::FromString(TEXT("Руины"));
 		case EKeepersNodeType::Camp: return FText::FromString(TEXT("Привал"));
 		case EKeepersNodeType::Boss: return FText::FromString(TEXT("Босс"));
+		case EKeepersNodeType::Event: return FText::FromString(TEXT("Событие"));
 		}
 		return FText::GetEmpty();
 	}
@@ -196,6 +198,11 @@ void UKeepersOptionButton::HandleClicked()
 {
 	if (OnPicked)
 	{
+		// The choice is made: its panel closes (the callback may open another one, or a level).
+		if (UKeepersChoiceWidget* Panel = GetTypedOuter<UKeepersChoiceWidget>())
+		{
+			Panel->RemoveFromParent();
+		}
 		// The callback may destroy this widget (opening a level), so copy it first.
 		TFunction<void()> Callback = OnPicked;
 		Callback();
@@ -209,6 +216,14 @@ void UKeepersChoiceWidget::Setup(const FText& Title, const FText& Subtitle, TArr
 	TitleText = Title;
 	SubtitleText = Subtitle;
 	PendingOptions = MoveTemp(Options);
+}
+
+void UKeepersChoiceWidget::TestPick(int32 Index)
+{
+	if (Cards.IsValidIndex(Index) && Cards[Index])
+	{
+		Cards[Index]->HandleClicked();
+	}
 }
 
 TSharedRef<SWidget> UKeepersChoiceWidget::RebuildWidget()
@@ -244,6 +259,7 @@ TSharedRef<SWidget> UKeepersChoiceWidget::RebuildWidget()
 		{
 			UKeepersOptionButton* Card = CreateWidget<UKeepersOptionButton>(this, UKeepersOptionButton::StaticClass());
 			Card->Setup(Option.Title, Option.Description, Option.Color, MoveTemp(Option.OnPicked));
+			Cards.Add(Card);
 			if (UHorizontalBoxSlot* CardSlot = Row->AddChildToHorizontalBox(Card))
 			{
 				CardSlot->SetPadding(FMargin(8.f, 0.f));
@@ -419,6 +435,10 @@ void UKeepersCampaignMapWidget::OnNodePicked(int32 NodeIndex)
 		ShowArtifactChoice(FText::FromString(TEXT("Древние руины")),
 			FText::FromString(TEXT("Под мхом блестят две реликвии. Унести можно только одну — вторую стережёт очень принципиальная улитка.")), 2);
 	}
+	else if (Type == EKeepersNodeType::Event)
+	{
+		ShowEvent(NodeIndex);
+	}
 	else if (Type == EKeepersNodeType::Camp)
 	{
 		if (UKeepersCampaignWorldSubsystem* World = GetWorld() ? GetWorld()->GetSubsystem<UKeepersCampaignWorldSubsystem>() : nullptr)
@@ -540,6 +560,35 @@ void UKeepersCampaignWorldSubsystem::TestCamp(const UObject* WorldContextObject,
 	else if (Self->Camp && Action == TEXT("leave") && Self->Camp->OnLeave)
 	{
 		Self->Camp->OnLeave();
+	}
+	else if (Action == TEXT("pick") || Action == TEXT("event"))
+	{
+		for (TObjectIterator<UKeepersCampaignMapWidget> It; It; ++It)
+		{
+			if (It->GetWorld() == World && It->IsInViewport())
+			{
+				if (Action == TEXT("pick"))
+				{
+					It->OnNodePicked(Index);
+				}
+				else
+				{
+					It->ShowEvent(Index);
+				}
+				break;
+			}
+		}
+	}
+	else if (Action == TEXT("choose"))
+	{
+		for (TObjectIterator<UKeepersChoiceWidget> It; It; ++It)
+		{
+			if (It->GetWorld() == World && It->IsInViewport())
+			{
+				It->TestPick(Index);
+				break;
+			}
+		}
 	}
 }
 

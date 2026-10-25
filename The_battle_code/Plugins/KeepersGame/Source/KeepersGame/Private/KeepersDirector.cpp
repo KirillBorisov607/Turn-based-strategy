@@ -20,6 +20,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Widgets/SViewport.h"
+#include "Widgets/SWindow.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKeepersDirector, Log, All);
 
@@ -359,9 +360,12 @@ void UKeepersDirectorSubsystem::CaptureFrame(UWorld* World)
 	{
 		return;
 	}
+	// The whole game window: the viewport widget alone draws the screen-space widgets (barks, numbers) twice.
+	TSharedPtr<SWindow> Window = FSlateApplication::Get().FindWidgetWindow(Viewport.ToSharedRef());
+	TSharedRef<SWidget> Source = Window.IsValid() ? StaticCastSharedRef<SWidget>(Window.ToSharedRef()) : StaticCastSharedRef<SWidget>(Viewport.ToSharedRef());
 	TArray<FColor> Pixels;
 	FIntVector Size;
-	if (!FSlateApplication::Get().TakeScreenshot(Viewport.ToSharedRef(), Pixels, Size) || Pixels.Num() != Size.X * Size.Y)
+	if (!FSlateApplication::Get().TakeScreenshot(Source, Pixels, Size) || Pixels.Num() != Size.X * Size.Y)
 	{
 		return;
 	}
