@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Blueprint/UserWidget.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -117,6 +117,14 @@ private:
 
 	UFUNCTION()
 	void OnContinueClicked();
+
+	UFUNCTION()
+	void OnTutorialClicked();
+
+	/** Every battle shows a goal: a campaign battle gets one picked by its node, others "defeat all". */
+	void EnsureObjective();
+
+	bool bObjectiveChecked = false;
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> Screen;

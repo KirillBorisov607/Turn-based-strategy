@@ -21,6 +21,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Testing", meta = (WorldContext = "WorldContext"))
 	static bool ClickViewport(UObject* WorldContext, FVector2D Fraction, bool bRightButton = false);
 
+	/** Presses or releases the left mouse button over a viewport point (fraction 0..1), for UMG buttons that need frames in between. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Testing", meta = (WorldContext = "WorldContext"))
+	static bool SetMouseButton(UObject* WorldContext, FVector2D Fraction, bool bDown);
+
 	/** Moves the mouse to a viewport point (fraction 0..1). */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Testing", meta = (WorldContext = "WorldContext"))
 	static bool MoveMouse(UObject* WorldContext, FVector2D Fraction);

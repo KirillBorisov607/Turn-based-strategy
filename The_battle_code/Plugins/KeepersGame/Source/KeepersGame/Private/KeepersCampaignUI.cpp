@@ -17,7 +17,11 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "KeepersBarks.h"
+#include "KeepersBattleObjective.h"
 #include "KeepersCampaign.h"
+#include "KeepersCreatureSubsystem.h"
+#include "KeepersTutorial.h"
 #include "KeepersReflection.h"
 #include "KeepersTerrainSubsystem.h"
 #include "Rendering/DrawElements.h"
@@ -110,6 +114,39 @@ namespace KeepersUI
 			}
 		}
 		return Result;
+	}
+}
+
+namespace KeepersUI
+{
+	/** One line about the winners, built from the enemy types in the battle. */
+	static FString DefeatLine(UObject* CombatSystem)
+	{
+		TSet<uint8> Types;
+		FArrayProperty* Property = CombatSystem ? CastField<FArrayProperty>(KeepersReflection::FindMember(CombatSystem->GetClass(), TEXT("UnitsInCombat"))) : nullptr;
+		FObjectPropertyBase* Inner = Property ? CastField<FObjectPropertyBase>(Property->Inner) : nullptr;
+		if (Inner)
+		{
+			FScriptArrayHelper Helper(Property, Property->ContainerPtrToValuePtr<void>(CombatSystem));
+			for (int32 I = 0; I < Helper.Num(); ++I)
+			{
+				UObject* Unit = Inner->GetObjectPropertyValue(Helper.GetRawPtr(I));
+				int32 Team = 0;
+				FProperty* TypeProperty = nullptr;
+				void* TypePtr = Unit ? KeepersReflection::FindValuePtr(Unit->GetClass(), Unit, TEXT("UnitType"), &TypeProperty) : nullptr;
+				if (Unit && KeepersReflection::GetInt(Unit->GetClass(), Unit, TEXT("TeamIndex"), Team) && Team != 0 && CastField<FByteProperty>(TypeProperty))
+				{
+					Types.Add(CastField<FByteProperty>(TypeProperty)->GetPropertyValue(TypePtr));
+				}
+			}
+		}
+		TArray<FString> Lines;
+		if (Types.Contains(3)) { Lines.Add(TEXT("Слизни радостно булькают.")); }
+		if (Types.Contains(4)) { Lines.Add(TEXT("Куры делают вид, что так и задумывали.")); }
+		if (Types.Contains(5)) { Lines.Add(TEXT("Летучие мыши пищат от восторга.")); }
+		if (Types.Contains(0) || Types.Contains(1) || Types.Contains(2)) { Lines.Add(TEXT("Отряд двойников ехидно машет вслед.")); }
+		if (Lines.Num() == 0) { Lines.Add(TEXT("Враги празднуют. Хранители зализывают раны.")); }
+		return FString::Join(Lines, TEXT(" "));
 	}
 }
 
@@ -480,6 +517,10 @@ void UKeepersCampaignWorldSubsystem::Tick(float DeltaTime)
 	{
 		ShowMap();
 	}
+	if (!bObjectiveChecked)
+	{
+		EnsureObjective();
+	}
 	TickBattle();
 }
 
@@ -510,10 +551,21 @@ void UKeepersCampaignWorldSubsystem::TryExtendMainMenu()
 	}
 	const UGridSlot* ReferenceSlot = Cast<UGridSlot>(Reference->Slot);
 
-	auto AddButton = [&](const TCHAR* Label, int32 Row, int32 Column, bool bContinue)
+	int32 BottomRow = 3;
+	if (const UWidget* Quit = Menu->WidgetTree->FindWidget(TEXT("Button_Quit")))
+	{
+		if (const UGridSlot* QuitSlot = Cast<UGridSlot>(Quit->Slot))
+		{
+			BottomRow = QuitSlot->GetRow();
+		}
+	}
+
+	auto AddButton = [&](const TCHAR* Label, int32 Row, int32 Column, int32 Action)
 	{
 		UButton* Button = Menu->WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
 		Button->SetStyle(Reference->GetStyle());
+		Button->SetBackgroundColor(Reference->GetBackgroundColor());
+		Button->SetColorAndOpacity(Reference->GetColorAndOpacity());
 		UTextBlock* Text = Menu->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		if (ReferenceText)
 		{
@@ -531,20 +583,19 @@ void UKeepersCampaignWorldSubsystem::TryExtendMainMenu()
 				NewSlot->SetVerticalAlignment(ReferenceSlot->GetVerticalAlignment());
 			}
 		}
-		if (bContinue)
+		switch (Action)
 		{
-			Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnContinueClicked);
-		}
-		else
-		{
-			Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnCampaignClicked);
+		case 0: Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnCampaignClicked); break;
+		case 1: Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnContinueClicked); break;
+		default: Button->OnClicked.AddDynamic(this, &UKeepersCampaignWorldSubsystem::OnTutorialClicked); break;
 		}
 	};
-	AddButton(TEXT("Кампания"), 0, 1, false);
+	AddButton(TEXT("Кампания"), 0, 1, 0);
 	if (UKeepersCampaignSubsystem::HasSavedCampaign())
 	{
-		AddButton(TEXT("Продолжить"), 3, 0, true);
+		AddButton(TEXT("Продолжить"), BottomRow, 0, 1);
 	}
+	AddButton(TEXT("Обучение"), BottomRow, 2, 2);
 	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Campaign buttons added to the main menu"));
 }
 
@@ -562,6 +613,67 @@ void UKeepersCampaignWorldSubsystem::OnContinueClicked()
 	{
 		Campaign->ContinueCampaign();
 	}
+}
+
+void UKeepersCampaignWorldSubsystem::OnTutorialClicked()
+{
+	UKeepersTutorialSubsystem::StartTutorial(GetWorld());
+}
+
+void UKeepersCampaignWorldSubsystem::EnsureObjective()
+{
+	UObject* CombatSystem = KeepersUI::FindCombatSystem(GetWorld());
+	bool bInCombat = false;
+	if (CombatSystem)
+	{
+		KeepersReflection::GetBool(CombatSystem->GetClass(), CombatSystem, TEXT("IsInCombat"), bInCombat);
+	}
+	if (!bInCombat || !KeepersReflection::GetObject(CombatSystem, TEXT("CurrentUnit")))
+	{
+		return;
+	}
+	bObjectiveChecked = true;
+	for (TActorIterator<AKeepersBattleObjective> It(GetWorld()); It; ++It)
+	{
+		return; // the level has its own goal
+	}
+
+	// Campaign battles get a goal picked by their node; others defeat every enemy.
+	int32 Variant = 0;
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	if (Campaign && Campaign->IsInBattleNode() && Campaign->GetNodes()[Campaign->GetCurrentNode()].Type == EKeepersNodeType::Battle)
+	{
+		Variant = Campaign->GetCurrentNode() % 3;
+	}
+
+	AKeepersBattleObjective* Objective = GetWorld()->SpawnActorDeferred<AKeepersBattleObjective>(AKeepersBattleObjective::StaticClass(), FTransform::Identity);
+	if (!Objective)
+	{
+		return;
+	}
+	if (Variant == 1)
+	{
+		Objective->SurviveTurns = 5;
+	}
+	else if (Variant == 2)
+	{
+		// A friendly chicken joins the heroes and must survive.
+		TArray<UObject*> Heroes = KeepersUI::Heroes(CombatSystem);
+		UKeepersCreatureSubsystem* Creatures = GetWorld()->GetSubsystem<UKeepersCreatureSubsystem>();
+		if (Heroes.Num() > 0 && Creatures)
+		{
+			FIntPoint Index;
+			KeepersReflection::GetIntPoint(Heroes[0]->GetClass(), Heroes[0], TEXT("Index"), Index);
+			if (AActor* Chicken = Creatures->SpawnUnitNear(CombatSystem, Heroes[0]->GetClass(), 4, Index, 0, 0, 1.f, NAME_None))
+			{
+				Objective->ProtectedUnit = Chicken;
+				Objective->ProtectedName = FText::FromString(TEXT("курицу Пеструшку"));
+				Objective->SurviveTurns = 4;
+				UKeepersBarkLibrary::Bark(Chicken, FText::FromString(TEXT("Ко! Защитите меня, Хранители!")));
+			}
+		}
+	}
+	Objective->FinishSpawning(FTransform::Identity);
 }
 
 void UKeepersCampaignWorldSubsystem::ShowMap()
@@ -631,9 +743,17 @@ void UKeepersCampaignWorldSubsystem::TickBattle()
 	}
 	if (bFinishing)
 	{
+		// The campaign shows its own result screen instead of the old one.
+		for (TObjectIterator<UUserWidget> It; It; ++It)
+		{
+			if (It->GetWorld() == GetWorld() && It->GetClass()->GetName() == TEXT("W_CombatEndScreen_C"))
+			{
+				It->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
 		// Let the last blow land before the result screen.
 		ResultDelay += GetWorld()->GetDeltaSeconds();
-		if (ResultDelay > 1.5f)
+		if (ResultDelay > 0.8f)
 		{
 			bBattleResolved = true;
 			int32 Winner = INDEX_NONE;
@@ -705,8 +825,7 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 		GiveUp.Color = FLinearColor(0.35f, 0.1f, 0.1f);
 		GiveUp.OnPicked = [WeakCampaign]() { if (WeakCampaign.IsValid()) { WeakCampaign->FailCampaign(); } };
 		Options.Add(MoveTemp(GiveUp));
-		ShowChoice(FText::FromString(TEXT("Хранители отступили...")),
-			FText::FromString(TEXT("Слизни празднуют. Куры делают вид, что так и задумывали.")), MoveTemp(Options));
+		ShowChoice(FText::FromString(TEXT("Хранители отступили...")), FText::FromString(KeepersUI::DefeatLine(CombatSystem)), MoveTemp(Options));
 		return;
 	}
 

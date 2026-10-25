@@ -1,4 +1,4 @@
-#include "KeepersCombatLibrary.h"
+﻿#include "KeepersCombatLibrary.h"
 
 #include "Algo/StableSort.h"
 #include "Engine/World.h"
@@ -131,6 +131,31 @@ void UKeepersCombatLibrary::SortUnitsInCombatByTeam(UObject* CombatSystem)
 	for (int32 Index = 0; Index < Units.Num(); ++Index)
 	{
 		Inner->SetObjectPropertyValue(Helper.GetRawPtr(Index), Units[Index]);
+	}
+}
+
+void UKeepersCombatLibrary::EndPlayerTurn(UObject* CombatSystem)
+{
+	const UObject* First = KeepersReflection::GetObject(CombatSystem, TEXT("CurrentUnit"));
+	if (!First)
+	{
+		return;
+	}
+	int32 Team = INDEX_NONE;
+	KeepersReflection::GetInt(First->GetClass(), First, TEXT("TeamIndex"), Team);
+	for (int32 Guard = 0; Guard < 64; ++Guard)
+	{
+		KeepersReflection::FCall(CombatSystem, TEXT("NextUnit")).Call();
+		const UObject* Next = KeepersReflection::GetObject(CombatSystem, TEXT("CurrentUnit"));
+		int32 NextTeam = INDEX_NONE;
+		if (Next)
+		{
+			KeepersReflection::GetInt(Next->GetClass(), Next, TEXT("TeamIndex"), NextTeam);
+		}
+		if (!Next || Next == First || NextTeam != Team || KeepersReflection::GetObject(Next, TEXT("Ai")))
+		{
+			break;
+		}
 	}
 }
 

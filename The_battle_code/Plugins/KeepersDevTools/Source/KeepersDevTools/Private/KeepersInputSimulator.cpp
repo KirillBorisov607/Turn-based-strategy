@@ -83,6 +83,29 @@ bool UKeepersInputSimulator::ClickWorldLocation(UObject* WorldContext, FVector L
 	return ClickViewport(WorldContext, FVector2D(Pixel.X / Width, Pixel.Y / Height), bRightButton);
 }
 
+bool UKeepersInputSimulator::SetMouseButton(UObject* WorldContext, FVector2D Fraction, bool bDown)
+{
+	FVector2D Screen;
+	if (!KeepersInputSim::FractionToScreen(WorldContext, Fraction, Screen))
+	{
+		return false;
+	}
+	KeepersInputSim::Move(Screen);
+	TSet<FKey> Pressed;
+	if (bDown)
+	{
+		Pressed.Add(EKeys::LeftMouseButton);
+		FPointerEvent Down(0, Screen, Screen, Pressed, EKeys::LeftMouseButton, 0.f, FModifierKeysState());
+		FSlateApplication::Get().ProcessMouseButtonDownEvent(nullptr, Down);
+	}
+	else
+	{
+		FPointerEvent Up(0, Screen, Screen, Pressed, EKeys::LeftMouseButton, 0.f, FModifierKeysState());
+		FSlateApplication::Get().ProcessMouseButtonUpEvent(Up);
+	}
+	return true;
+}
+
 bool UKeepersInputSimulator::MoveMouse(UObject* WorldContext, FVector2D Fraction)
 {
 	FVector2D Screen;

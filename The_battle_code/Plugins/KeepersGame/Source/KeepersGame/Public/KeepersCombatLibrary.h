@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "KeepersCombatLibrary.generated.h"
@@ -18,6 +18,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Combat", meta = (DefaultToSelf = "CombatSystem"))
 	static void SortUnitsInCombatByTeam(UObject* CombatSystem);
+
+	/**
+	 * "End turn" button: ends the turn of every hero that has not played yet this phase, so the enemies
+	 * play next. Stops at a unit controlled by the AI (it plays by itself).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Combat", meta = (DefaultToSelf = "CombatSystem"))
+	static void EndPlayerTurn(UObject* CombatSystem);
 
 	/**
 	 * Heroes act in any order during the player phase (called from Action_Cbt_Move.ExecuteAction).

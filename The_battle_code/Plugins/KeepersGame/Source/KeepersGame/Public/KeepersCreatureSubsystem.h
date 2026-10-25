@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Subsystems/WorldSubsystem.h"
 #include "KeepersCreatureSubsystem.generated.h"
@@ -32,13 +32,14 @@ public:
 	static constexpr int32 ChickenCallEvery = 2;
 	static constexpr int32 ChickenMaxCalls = 3;
 
+	/** Spawns a unit of UnitType next to Index for Team and adds it to the combat. */
+	AActor* SpawnUnitNear(UObject* CombatSystem, UClass* UnitClass, uint8 UnitType, const FIntPoint& Index, int32 Team, int32 Hp, float Scale, FName Tag, bool bCanAct = true);
+
 private:
 	void LeavePuddle(UObject* Grid, const FIntPoint& Index);
 	void Split(UObject* CombatSystem, AActor* Slime, const FIntPoint& Index);
 	void OnRoundStarted(UObject* CombatSystem);
 
-	/** Spawns a unit of UnitType next to Index for Team and adds it to the combat. */
-	AActor* SpawnUnitNear(UObject* CombatSystem, UClass* UnitClass, uint8 UnitType, const FIntPoint& Index, int32 Team, int32 Hp, float Scale, FName Tag, bool bCanAct = true);
 
 	/** Last known tile of every living slime. */
 	TMap<TWeakObjectPtr<AActor>, FIntPoint> SlimeTiles;
