@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/UnrealType.h"
@@ -29,6 +29,10 @@ namespace KeepersReflection
 
 	/** Reads a byte-sized enum value (Blueprint enums) from a struct value. */
 	KEEPERSGAME_API bool GetEnumByte(const UStruct* Struct, const void* Container, const FString& Name, uint8& OutValue);
+
+	/** Reads / adds to an int in BP_Unit.UnitData.Stats (HP_Max, MP_Current, AP_Max, ...). */
+	KEEPERSGAME_API bool GetUnitStat(UObject* Unit, const FString& Stat, int32& OutValue);
+	KEEPERSGAME_API bool AddUnitStat(UObject* Unit, const FString& Stat, int32 Delta);
 
 	/** Sets a Blueprint object variable. */
 	KEEPERSGAME_API bool SetObject(UObject* Object, const FString& Name, UObject* Value);

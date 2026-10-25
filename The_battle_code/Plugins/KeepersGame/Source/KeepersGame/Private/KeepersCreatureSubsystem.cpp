@@ -7,6 +7,7 @@
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "KeepersBarks.h"
+#include "KeepersCampaign.h"
 #include "KeepersReflection.h"
 #include "KeepersTerrainSubsystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -196,7 +197,7 @@ void UKeepersCreatureSubsystem::Tick(float DeltaTime)
 		else if (LivingSlimes.Remove(Unit) > 0)
 		{
 			const FIntPoint* LastTile = SlimeTiles.Find(Unit);
-			if (!Unit->ActorHasTag(KeepersCreatures::SmallSlimeTag))
+			if (!Unit->ActorHasTag(KeepersCreatures::SmallSlimeTag) && !UKeepersCampaignSubsystem::HasArtifact(this, TEXT("SaltyBiscuit")))
 			{
 				Split(CombatSystem, Unit, LastTile ? *LastTile : Index);
 			}
@@ -297,7 +298,7 @@ void UKeepersCreatureSubsystem::OnRoundStarted(UObject* CombatSystem)
 	{
 		return;
 	}
-	if (ChickenCalls >= ChickenMaxCalls)
+	if (ChickenCalls >= ChickenMaxCalls || UKeepersCampaignSubsystem::HasArtifact(this, TEXT("ShepherdBell")))
 	{
 		return;
 	}

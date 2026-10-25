@@ -1,4 +1,4 @@
-#include "KeepersReflection.h"
+﻿#include "KeepersReflection.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKeepersReflection, Log, All);
 
@@ -56,6 +56,43 @@ namespace KeepersReflection
 		void* Ptr = FindValuePtr(Object->GetClass(), const_cast<UObject*>(Object), Name, &Property);
 		const FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property);
 		return ObjectProperty && Ptr ? ObjectProperty->GetObjectPropertyValue(Ptr) : nullptr;
+	}
+
+	static int32* FindUnitStat(UObject* Unit, const FString& Stat)
+	{
+		if (!Unit)
+		{
+			return nullptr;
+		}
+		FProperty* DataProperty = nullptr;
+		void* Data = FindValuePtr(Unit->GetClass(), Unit, TEXT("UnitData"), &DataProperty);
+		const FStructProperty* DataStruct = CastField<FStructProperty>(DataProperty);
+		FProperty* StatsProperty = nullptr;
+		void* Stats = DataStruct ? FindValuePtr(DataStruct->Struct, Data, TEXT("Stats"), &StatsProperty) : nullptr;
+		const FStructProperty* StatsStruct = CastField<FStructProperty>(StatsProperty);
+		FProperty* StatProperty = nullptr;
+		void* Value = StatsStruct ? FindValuePtr(StatsStruct->Struct, Stats, Stat, &StatProperty) : nullptr;
+		return CastField<FIntProperty>(StatProperty) ? static_cast<int32*>(Value) : nullptr;
+	}
+
+	bool GetUnitStat(UObject* Unit, const FString& Stat, int32& OutValue)
+	{
+		if (const int32* Value = FindUnitStat(Unit, Stat))
+		{
+			OutValue = *Value;
+			return true;
+		}
+		return false;
+	}
+
+	bool AddUnitStat(UObject* Unit, const FString& Stat, int32 Delta)
+	{
+		if (int32* Value = FindUnitStat(Unit, Stat))
+		{
+			*Value += Delta;
+			return true;
+		}
+		return false;
 	}
 
 	bool SetObject(UObject* Object, const FString& Name, UObject* Value)

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Subsystems/WorldSubsystem.h"
 #include "KeepersTerrainSubsystem.generated.h"
@@ -43,6 +43,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Terrain")
 	bool GrowForest(UObject* Grid, FIntPoint Index);
 
+	/** Was this tile turned into forest by Sprout? */
+	bool IsForest(const FIntPoint& Index) const { return ForestTiles.Contains(Index); }
+
 	/** Pushes the unit on Target one tile away from Origin. Returns false if there was no unit. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Terrain")
 	bool PushUnit(UObject* CombatSystem, FIntPoint Origin, FIntPoint Target);
@@ -66,6 +69,8 @@ private:
 	FDelegateHandle SpawnHandle;
 
 	TMap<TWeakObjectPtr<AActor>, EKeepersTerrainEffect> PendingEffects;
+
+	TSet<FIntPoint> ForestTiles;
 
 	UPROPERTY()
 	TArray<TObjectPtr<AActor>> TerrainProps;

@@ -1,10 +1,11 @@
-#include "KeepersTerrainSubsystem.h"
+﻿#include "KeepersTerrainSubsystem.h"
 
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "KeepersReflection.h"
 #include "KeepersBarks.h"
+#include "KeepersCampaign.h"
 #include "KeepersPlantActor.h"
 #include "KeepersRockActor.h"
 #include "TimerManager.h"
@@ -214,7 +215,7 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 	switch (Effect)
 	{
 	case EKeepersTerrainEffect::RaiseRock:
-		if (RaiseRock(Grid, Target))
+		if (RaiseRock(Grid, Target, UKeepersCampaignSubsystem::HasArtifact(this, TEXT("AncestorStone")) ? 3 : 2))
 		{
 			UKeepersBarkLibrary::BarkAbout(Cast<AActor>(KeepersTerrain::GetUnitOnTile(Grid, Origin)), EKeepersBarkSituation::RaisesRock, 0.8f);
 		}
@@ -310,11 +311,25 @@ bool UKeepersTerrainSubsystem::GrowForest(UObject* Grid, FIntPoint Index)
 	{
 		return false;
 	}
-	const bool bOccupied = KeepersTerrain::GetUnitOnTile(Grid, Index) != nullptr;
+	UObject* Occupant = KeepersTerrain::GetUnitOnTile(Grid, Index);
+	const bool bOccupied = Occupant != nullptr;
 	FTransform TileTransform;
 	if (!SetTileType(Grid, Index, KeepersTerrain::ForestTileType, TileTransform))
 	{
 		return false;
+	}
+	ForestTiles.Add(Index);
+	if (Occupant && UKeepersCampaignSubsystem::HasArtifact(this, TEXT("OakHeart")))
+	{
+		int32 Team = -1;
+		KeepersReflection::GetInt(Occupant->GetClass(), Occupant, TEXT("TeamIndex"), Team);
+		if (Team == 0)
+		{
+			KeepersReflection::FCall Heal(Occupant, TEXT("ModifyCurrentHp"));
+			Heal.Set<int32>(TEXT("Modifier"), 3);
+			Heal.Set<bool>(TEXT("ShowNumber"), true);
+			Heal.Call();
+		}
 	}
 
 	static const TCHAR* Trees[] = {
@@ -389,11 +404,13 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 		}
 	}
 
+	const int32 FeatherBonus = UKeepersCampaignSubsystem::HasArtifact(this, TEXT("StormFeather")) ? 1 : 0;
+	const int32 BumpDamage = KeepersTerrain::BumpDamage + FeatherBonus;
 	if (!Destination.IsSet())
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s hits the edge"), *Unit->GetName());
 		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Bumped);
-		DamageUnit(CombatSystem, Unit, KeepersTerrain::BumpDamage);
+		DamageUnit(CombatSystem, Unit, BumpDamage);
 		return true;
 	}
 
@@ -403,15 +420,15 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s bumps into %s"), *Unit->GetName(), *Blocker->GetName());
 		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Bumped);
-		DamageUnit(CombatSystem, Unit, KeepersTerrain::BumpDamage);
-		DamageUnit(CombatSystem, Blocker, KeepersTerrain::BumpDamage);
+		DamageUnit(CombatSystem, Unit, BumpDamage);
+		DamageUnit(CombatSystem, Blocker, BumpDamage);
 		return true;
 	}
 	if (DestinationType == KeepersTerrain::ObstacleTileType)
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s hits a rock"), *Unit->GetName());
 		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Bumped);
-		DamageUnit(CombatSystem, Unit, KeepersTerrain::BumpDamage);
+		DamageUnit(CombatSystem, Unit, BumpDamage + (UKeepersCampaignSubsystem::HasArtifact(this, TEXT("AncestorStone")) ? 1 : 0));
 		return true;
 	}
 
@@ -432,6 +449,10 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	{
 		UE_LOG(LogKeepersTerrain, Log, TEXT("Push: %s to (%d,%d)"), *Unit->GetName(), Destination->X, Destination->Y);
 		UKeepersBarkLibrary::BarkAbout(Cast<AActor>(Unit), EKeepersBarkSituation::Pushed, 0.7f);
+		if (FeatherBonus > 0)
+		{
+			DamageUnit(CombatSystem, Unit, FeatherBonus);
+		}
 	}
 	return true;
 }
