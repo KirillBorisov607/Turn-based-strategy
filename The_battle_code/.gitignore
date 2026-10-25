@@ -74,3 +74,6 @@ Plugins/**/Intermediate/*
 DerivedDataCache/*
 .idea/
 *.code-workspace
+
+# Local-only third-party editor plugins (licensed per user, not redistributed)
+Plugins/UnrealMCPServer/

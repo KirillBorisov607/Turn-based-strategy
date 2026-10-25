@@ -1,0 +1,18 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Keepers Dev Tools",
+	"Description": "Editor-only tools for Keepers of the Lands: export Blueprint graphs to text for review.",
+	"Category": "Keepers",
+	"CreatedBy": "Keepers of the Lands",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"Modules": [
+		{
+			"Name": "KeepersDevTools",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
