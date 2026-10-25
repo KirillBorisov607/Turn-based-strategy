@@ -37,6 +37,10 @@ struct FKeepersHeroDef
 	FText Unlock;
 	TArray<FName> Spells;
 	TArray<FKeepersLook> Looks;
+	/** Enemies of the Toony Tiny RTS Set (bandits, brutes): not in the roster, every unit picks one of the looks. */
+	bool bEnemy = false;
+	/** Size of the figure relative to a hero. */
+	float Scale = 1.f;
 	/** Stats for heroes without a data table row. */
 	int32 Hp = 0;
 	int32 Mp = 0;
@@ -55,6 +59,10 @@ namespace KeepersHeroes
 {
 	KEEPERSGAME_API const TArray<FKeepersHeroDef>& All();
 	KEEPERSGAME_API const FKeepersHeroDef* Find(FName Id);
+	/** Toony enemies (bandits, archers, brutes). */
+	KEEPERSGAME_API const TArray<FKeepersHeroDef>& Enemies();
+	/** A hero or a Toony enemy by id. */
+	KEEPERSGAME_API const FKeepersHeroDef* FindAny(FName Id);
 	KEEPERSGAME_API const FKeepersHeroDef* FindByUnitType(int32 UnitType);
 	KEEPERSGAME_API const FKeepersSpellInfo* FindSpell(FName Id);
 
@@ -178,7 +186,7 @@ public:
 private:
 	void Dress(ACharacter* Unit);
 	/** Outfit and colour of a hero unit of a team. */
-	void LookFor(const struct FKeepersHeroDef& Hero, int32 Team, FKeepersLook& OutLook, FName& OutColor) const;
+	void LookFor(const struct FKeepersHeroDef& Hero, int32 Team, int32 Variant, FKeepersLook& OutLook, FName& OutColor) const;
 
 	struct FDressed
 	{

@@ -66,6 +66,7 @@ namespace KeepersMenu
 
 	static const FQuickBattle QuickBattles[] =
 	{
+		{ TEXT("L_Slice_Hex"), TEXT("Наёмники кур"), TEXT("Куры наняли людей: разбойники, стрелки и громила вместе со слизнями. Держите строй.") },
 		{ TEXT("L_Combat_FairDuel"), TEXT("Честная дуэль"), TEXT("Три Хранителя против трёх таких же. Кто лучше использует местность?") },
 		{ TEXT("L_Combat_SoSlimy"), TEXT("Слишком скользко"), TEXT("Слизни оставляют лужи и делятся надвое. Не дайте им заполнить поле.") },
 		{ TEXT("L_Combat_ChickenHunt"), TEXT("Охота на кур"), TEXT("Куры зовут подмогу каждые два хода. Действуйте быстро.") },
@@ -475,10 +476,15 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 		for (const KeepersMenu::FQuickBattle& Battle : KeepersMenu::QuickBattles)
 		{
 			const FName Level(Battle.Level);
-			AddItem(Battle.Name, Battle.Description, [WeakThis, Level]()
+			const bool bMercenaries = FCString::Strcmp(Battle.Name, TEXT("Наёмники кур")) == 0;
+			AddItem(Battle.Name, Battle.Description, [WeakThis, Level, bMercenaries]()
 			{
 				if (WeakThis.IsValid())
 				{
+					if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get()))
+					{
+						Campaign->bMercenaryQuickBattle = bMercenaries;
+					}
 					WeakThis->Leave([WeakThis, Level]() { if (WeakThis.IsValid()) { KeepersLoading::OpenLevel(WeakThis.Get(), Level); } });
 				}
 			});

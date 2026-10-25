@@ -182,6 +182,66 @@ namespace KeepersHeroes
 		return Heroes;
 	}
 
+	static TArray<FKeepersHeroDef> BuildEnemies()
+	{
+		using A = EKeepersAnimSet;
+		TArray<FKeepersHeroDef> Enemies;
+
+		FKeepersHeroDef& Bandit = Enemies.AddDefaulted_GetRef();
+		Bandit.Id = TEXT("Bandit");
+		Bandit.Name = T(TEXT("Разбойник"));
+		Bandit.Class = T(TEXT("Наёмник кур"));
+		Bandit.UnitType = 6;
+		Bandit.bEnemy = true;
+		Bandit.Spells = { TEXT("SwordSlash") };
+		Bandit.Looks = {
+			MakeLook(TEXT("Головорез"), A::Infantry, TEXT("Unit_Body_02a"), TEXT("Unit_Head_01b"), TEXT("SM_w_axe_A"), TEXT("SM_shield_02")),
+			MakeLook(TEXT("Дубинщик"), A::Infantry, TEXT("Unit_Body_04a"), TEXT("Unit_Head_02e"), TEXT("SM_w_club")),
+			MakeLook(TEXT("Рубака"), A::Infantry, TEXT("Unit_Body_01b"), TEXT("Unit_Head_04b"), TEXT("SM_w_short_sword"), TEXT("SM_shield_03")),
+			MakeLook(TEXT("Наёмник"), A::Infantry, TEXT("Unit_Body_05b"), TEXT("Unit_Head_05c"), TEXT("SM_w_mace_B"), TEXT("SM_shield_07")),
+		};
+
+		FKeepersHeroDef& Archer = Enemies.AddDefaulted_GetRef();
+		Archer.Id = TEXT("BanditArcher");
+		Archer.Name = T(TEXT("Стрелок"));
+		Archer.Class = T(TEXT("Наёмник кур"));
+		Archer.UnitType = 7;
+		Archer.bEnemy = true;
+		Archer.Spells = { TEXT("ShortRangeArrow") };
+		Archer.Looks = {
+			MakeLook(TEXT("Лучник"), A::Archer, TEXT("Unit_Body_03a"), TEXT("Unit_Head_03b"), TEXT(""), TEXT(""), TEXT("SM_w_short_bow"), TEXT("SM_quiver_B")),
+			MakeLook(TEXT("Браконьер"), A::Archer, TEXT("Unit_Body_02b"), TEXT("Unit_Head_02d"), TEXT(""), TEXT(""), TEXT("SM_w_short_bow"), TEXT("SM_quiver_A")),
+			MakeLook(TEXT("Арбалетчик"), A::Crossbow, TEXT("Unit_Body_04b"), TEXT("Unit_Head_04e"), TEXT("SM_w_crossbow_B")),
+		};
+
+		FKeepersHeroDef& Brute = Enemies.AddDefaulted_GetRef();
+		Brute.Id = TEXT("Brute");
+		Brute.Name = T(TEXT("Громила"));
+		Brute.Class = T(TEXT("Наёмник кур"));
+		Brute.UnitType = 8;
+		Brute.bEnemy = true;
+		Brute.Scale = 1.2f;
+		Brute.Spells = { TEXT("SwordSlash") };
+		Brute.Looks = {
+			MakeLook(TEXT("Громила"), A::TwoHanded, TEXT("Unit_Body_13b"), TEXT("Unit_Head_12b"), TEXT("SM_w_TH_maul_B")),
+			MakeLook(TEXT("Дровосек"), A::TwoHanded, TEXT("Unit_Body_13a"), TEXT("Unit_Head_12d"), TEXT("SM_w_TH_Axe_B")),
+			MakeLook(TEXT("Молотобоец"), A::TwoHanded, TEXT("Unit_Body_09d"), TEXT("Unit_Head_08b"), TEXT("SM_w_TH_warhammer")),
+		};
+		return Enemies;
+	}
+
+	const TArray<FKeepersHeroDef>& Enemies()
+	{
+		static const TArray<FKeepersHeroDef> List = BuildEnemies();
+		return List;
+	}
+
+	const FKeepersHeroDef* FindAny(FName Id)
+	{
+		const FKeepersHeroDef* Hero = Find(Id);
+		return Hero ? Hero : Enemies().FindByPredicate([Id](const FKeepersHeroDef& Enemy) { return Enemy.Id == Id; });
+	}
+
 	const TArray<FKeepersHeroDef>& All()
 	{
 		static const TArray<FKeepersHeroDef> Heroes = BuildHeroes();
@@ -195,7 +255,9 @@ namespace KeepersHeroes
 
 	const FKeepersHeroDef* FindByUnitType(int32 UnitType)
 	{
-		return All().FindByPredicate([UnitType](const FKeepersHeroDef& Hero) { return Hero.UnitType != INDEX_NONE && Hero.UnitType == UnitType; });
+		auto Matches = [UnitType](const FKeepersHeroDef& Hero) { return Hero.UnitType != INDEX_NONE && Hero.UnitType == UnitType; };
+		const FKeepersHeroDef* Hero = All().FindByPredicate(Matches);
+		return Hero ? Hero : Enemies().FindByPredicate(Matches);
 	}
 
 	const FKeepersSpellInfo* FindSpell(FName Id)
@@ -482,8 +544,15 @@ void UKeepersHeroLookSubsystem::Tick(float DeltaTime)
 	}
 }
 
-void UKeepersHeroLookSubsystem::LookFor(const FKeepersHeroDef& Hero, int32 Team, FKeepersLook& OutLook, FName& OutColor) const
+void UKeepersHeroLookSubsystem::LookFor(const FKeepersHeroDef& Hero, int32 Team, int32 Variant, FKeepersLook& OutLook, FName& OutColor) const
 {
+	static const FName EnemyColors[] = { TEXT("Red"), TEXT("Purple"), TEXT("Yellow") };
+	if (Hero.bEnemy)
+	{
+		OutLook = Hero.Looks[Variant % Hero.Looks.Num()];
+		OutColor = Team == 0 ? FName(TEXT("Blue")) : EnemyColors[(FMath::Max(Team, 1) - 1) % UE_ARRAY_COUNT(EnemyColors)];
+		return;
+	}
 	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(GetWorld());
 	if (Team == 0 && Party)
 	{
@@ -494,7 +563,6 @@ void UKeepersHeroLookSubsystem::LookFor(const FKeepersHeroDef& Hero, int32 Team,
 	// Enemy heroes: another outfit than the player's and a colour per enemy team.
 	const int32 PlayerLook = Party ? Party->GetLookIndex(Hero.Id) : 0;
 	OutLook = Hero.Looks[(PlayerLook + 1) % Hero.Looks.Num()];
-	static const FName EnemyColors[] = { TEXT("Red"), TEXT("Purple"), TEXT("Yellow") };
 	OutColor = EnemyColors[(FMath::Max(Team, 1) - 1) % UE_ARRAY_COUNT(EnemyColors)];
 }
 
@@ -505,7 +573,7 @@ UTextureRenderTarget2D* UKeepersHeroLookSubsystem::GetPortrait(FName HeroId, boo
 	{
 		return Found->Get();
 	}
-	const FKeepersHeroDef* Hero = KeepersHeroes::Find(HeroId);
+	const FKeepersHeroDef* Hero = KeepersHeroes::FindAny(HeroId);
 	UWorld* World = GetWorld();
 	if (!Hero || Hero->Looks.Num() == 0 || !World)
 	{
@@ -531,7 +599,7 @@ UTextureRenderTarget2D* UKeepersHeroLookSubsystem::GetPortrait(FName HeroId, boo
 	const FVector Spot = Studio->GetActorLocation() + FVector(Portraits.Num() * 400.f, 0.f, 0.f);
 	FKeepersLook Look;
 	FName Color;
-	LookFor(*Hero, bEnemy ? 1 : 0, Look, Color);
+	LookFor(*Hero, bEnemy ? 1 : 0, 0, Look, Color);
 	UKeepersFigureComponent* Figure = NewObject<UKeepersFigureComponent>(Studio);
 	Figure->SetupAttachment(Studio->GetRootComponent());
 	Figure->SetWorldLocation(Spot);
@@ -573,7 +641,8 @@ void UKeepersHeroLookSubsystem::Dress(ACharacter* Unit)
 	KeepersReflection::GetInt(Unit->GetClass(), Unit, TEXT("TeamIndex"), Team);
 	FKeepersLook Look;
 	FName Color;
-	LookFor(*Hero, Team, Look, Color);
+	// Enemies of one kind wear different outfits: pick by the unit.
+	LookFor(*Hero, Team, static_cast<int32>(GetTypeHash(Unit->GetName()) % 97), Look, Color);
 
 	// The old mesh keeps animating out of sight: its Anim Blueprint holds the state the figure mirrors.
 	Mesh->SetVisibility(false, false);
@@ -584,7 +653,7 @@ void UKeepersHeroLookSubsystem::Dress(ACharacter* Unit)
 	// Same facing (+Y) as the old meshes; scale to their height.
 	const FBoxSphereBounds Bounds = Mesh->GetSkeletalMeshAsset()->GetBounds();
 	const float OldHeight = Bounds.Origin.Z + Bounds.BoxExtent.Z;
-	Figure->SetRelativeScale3D(FVector(FMath::Max(OldHeight, 50.f) * 0.85f / UKeepersFigureComponent::FigureHeight));
+	Figure->SetRelativeScale3D(FVector(FMath::Max(OldHeight, 50.f) * 0.85f * Hero->Scale / UKeepersFigureComponent::FigureHeight));
 	Figure->RegisterComponent();
 	Figure->SetLook(Look);
 	Figure->SetColor(Color);

@@ -154,6 +154,9 @@ FText UKeepersBattleHudSubsystem::LocalUnitName(const FString& EnglishName)
 		{ TEXT("slime"), TEXT("Слизень") },
 		{ TEXT("chicken"), TEXT("Курица") },
 		{ TEXT("bat"), TEXT("Летучая мышь") },
+		{ TEXT("bandit"), TEXT("Разбойник") },
+		{ TEXT("banditarcher"), TEXT("Стрелок") },
+		{ TEXT("brute"), TEXT("Громила") },
 	};
 	const FString* Name = Names.Find(EnglishName.TrimStartAndEnd().ToLower());
 	return Name ? FText::FromString(*Name) : FText::GetEmpty();
@@ -337,7 +340,7 @@ void UKeepersBattleHudSubsystem::RefreshDynamic(UUserWidget* Hud)
 			// Hero icons (TX_Icon_Warrior...) become live portraits of the Toony figures.
 			const UTexture2D* Icon = Cast<UTexture2D>(Image->GetBrush().GetResourceObject());
 			FString Type;
-			if (Looks && Icon && Icon->GetName().Split(TEXT("TX_Icon_"), nullptr, &Type) && KeepersHeroes::Find(*Type))
+			if (Looks && Icon && Icon->GetName().Split(TEXT("TX_Icon_"), nullptr, &Type) && KeepersHeroes::FindAny(*Type))
 			{
 				// The card's team ring tells friend from foe (the Blueprint tints it blue or red).
 				bool bEnemy = false;

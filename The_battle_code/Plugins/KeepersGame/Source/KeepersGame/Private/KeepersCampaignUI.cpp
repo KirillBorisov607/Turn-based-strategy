@@ -573,6 +573,104 @@ void UKeepersCampaignWorldSubsystem::Tick(float DeltaTime)
 		EnsureObjective();
 	}
 	TickBattle();
+	TickMercenaries();
+}
+
+void UKeepersCampaignWorldSubsystem::TickMercenaries()
+{
+	if (bMercenariesDone)
+	{
+		return;
+	}
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	UObject* CombatSystem = Campaign ? KeepersUI::FindCombatSystem(GetWorld()) : nullptr;
+	bool bInCombat = false;
+	if (!CombatSystem || !KeepersReflection::GetBool(CombatSystem->GetClass(), CombatSystem, TEXT("IsInCombat"), bInCombat) || !bInCombat)
+	{
+		return;
+	}
+
+	// Who comes: by the node of the campaign, or the quick battle with mercenaries.
+	TArray<uint8> Band;
+	constexpr uint8 Bandit = 6;
+	constexpr uint8 Archer = 7;
+	constexpr uint8 Brute = 8;
+	if (Campaign->bMercenaryQuickBattle)
+	{
+		Campaign->bMercenaryQuickBattle = false;
+		Band = { Bandit, Bandit, Archer, Brute };
+	}
+	else if (Campaign->IsInBattleNode())
+	{
+		const FKeepersMapNode& Node = Campaign->GetNodes()[Campaign->GetCurrentNode()];
+		if (Node.Type == EKeepersNodeType::Elite)
+		{
+			Band = { Bandit, Bandit, Archer };
+		}
+		else if (Node.Type == EKeepersNodeType::Boss)
+		{
+			Band = { Brute, Archer };
+		}
+		else if (Node.Column >= 2)
+		{
+			Band = { Bandit, Archer };
+		}
+	}
+	if (Band.Num() == 0)
+	{
+		// Campaign battles decide once; other battles keep listening for the mercenaries' flag.
+		bMercenariesDone = Campaign->IsInBattleNode();
+		return;
+	}
+	bMercenariesDone = true;
+
+	// They stand next to the enemies already on the field.
+	TArray<UObject*> Enemies;
+	UObject* AnyUnit = nullptr;
+	FArrayProperty* Property = CastField<FArrayProperty>(KeepersReflection::FindMember(CombatSystem->GetClass(), TEXT("UnitsInCombat")));
+	FObjectPropertyBase* Inner = Property ? CastField<FObjectPropertyBase>(Property->Inner) : nullptr;
+	if (Inner)
+	{
+		FScriptArrayHelper Helper(Property, Property->ContainerPtrToValuePtr<void>(CombatSystem));
+		for (int32 I = 0; I < Helper.Num(); ++I)
+		{
+			UObject* Unit = Inner->GetObjectPropertyValue(Helper.GetRawPtr(I));
+			int32 Team = 0;
+			if (Unit && KeepersReflection::GetInt(Unit->GetClass(), Unit, TEXT("TeamIndex"), Team))
+			{
+				AnyUnit = AnyUnit ? AnyUnit : Unit;
+				if (Team != 0)
+				{
+					Enemies.Add(Unit);
+				}
+			}
+		}
+	}
+	UKeepersCreatureSubsystem* Creatures = GetWorld()->GetSubsystem<UKeepersCreatureSubsystem>();
+	if (Enemies.Num() == 0 || !AnyUnit || !Creatures)
+	{
+		return;
+	}
+	// Same size as the heroes on this map.
+	float Scale = 1.f;
+	for (UObject* Hero : KeepersUI::Heroes(CombatSystem))
+	{
+		if (const AActor* HeroActor = Cast<AActor>(Hero))
+		{
+			Scale = HeroActor->GetActorScale3D().X;
+			break;
+		}
+	}
+	for (int32 I = 0; I < Band.Num(); ++I)
+	{
+		UObject* Near = Enemies[I % Enemies.Num()];
+		FIntPoint Index;
+		int32 Team = 1;
+		KeepersReflection::GetIntPoint(Near->GetClass(), Near, TEXT("Index"), Index);
+		KeepersReflection::GetInt(Near->GetClass(), Near, TEXT("TeamIndex"), Team);
+		Creatures->SpawnUnitNear(CombatSystem, AnyUnit->GetClass(), Band[I], Index, Team, 0, Scale, TEXT("Mercenary"));
+	}
+	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Mercenaries joined: %d"), Band.Num());
 }
 
 void UKeepersCampaignWorldSubsystem::EnsureObjective()

@@ -332,6 +332,14 @@ bool UKeepersCampaignSubsystem::UpgradeGear(FName Hero, EKeepersGear Gear)
 	return true;
 }
 
+void UKeepersCampaignSubsystem::SetMercenaryBattle(const UObject* WorldContextObject, bool bEnabled)
+{
+	if (UKeepersCampaignSubsystem* Campaign = Get(WorldContextObject))
+	{
+		Campaign->bMercenaryQuickBattle = bEnabled;
+	}
+}
+
 int32 UKeepersCampaignSubsystem::GoldFor(EKeepersNodeType Type)
 {
 	switch (Type)

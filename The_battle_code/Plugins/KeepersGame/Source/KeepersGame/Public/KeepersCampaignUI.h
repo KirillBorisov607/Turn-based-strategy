@@ -115,6 +115,9 @@ public:
 private:
 	void ShowMap();
 	void TickBattle();
+	/** Chickens hire people: bandits, archers and brutes join elite, late and boss battles of the campaign. */
+	void TickMercenaries();
+	bool bMercenariesDone = false;
 	void ApplyArtifactsAtBattleStart(UObject* CombatSystem);
 	void OnRoundStarted(UObject* CombatSystem);
 	void OnBattleFinished(UObject* CombatSystem, int32 Winner);

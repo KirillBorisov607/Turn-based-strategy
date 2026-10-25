@@ -176,6 +176,13 @@ public:
 	/** Price of an artifact at the camp's merchant. */
 	static int32 ArtifactPrice() { return 45; }
 
+	/** Set by the quick battle "Наёмники кур": the next battle gets a band of mercenaries. */
+	bool bMercenaryQuickBattle = false;
+
+	/** The next battle gets a band of mercenaries (for scripts and tests; the quick battle sets it too). */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Campaign", meta = (WorldContext = "WorldContextObject"))
+	static void SetMercenaryBattle(const UObject* WorldContextObject, bool bEnabled);
+
 	/** Gold a battle node brings. */
 	static int32 GoldFor(EKeepersNodeType Type);
 
