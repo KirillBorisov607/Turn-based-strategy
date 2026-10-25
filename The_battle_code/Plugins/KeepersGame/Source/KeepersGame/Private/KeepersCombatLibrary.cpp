@@ -134,6 +134,114 @@ void UKeepersCombatLibrary::SortUnitsInCombatByTeam(UObject* CombatSystem)
 	}
 }
 
+bool UKeepersCombatLibrary::TrySwitchToUnitAt(UObject* Action, FIntPoint Index)
+{
+	UObject* PlayerActions = KeepersReflection::GetObject(Action, TEXT("PlayerActions"));
+	UObject* CombatSystem = KeepersReflection::GetObject(PlayerActions, TEXT("CombatSystem"));
+	UObject* Grid = KeepersReflection::GetObject(CombatSystem, TEXT("Grid"));
+	UObject* Current = KeepersReflection::GetObject(CombatSystem, TEXT("CurrentUnit"));
+	if (!Grid || !Current)
+	{
+		return false;
+	}
+
+	// The unit standing on the clicked tile.
+	UObject* Clicked = nullptr;
+	FMapProperty* TilesProperty = CastField<FMapProperty>(KeepersReflection::FindMember(Grid->GetClass(), TEXT("GridTiles")));
+	const FStructProperty* TileProperty = TilesProperty ? CastField<FStructProperty>(TilesProperty->ValueProp) : nullptr;
+	if (TileProperty)
+	{
+		FScriptMapHelper Tiles(TilesProperty, TilesProperty->ContainerPtrToValuePtr<void>(Grid));
+		for (FScriptMapHelper::FIterator It(Tiles); It; ++It)
+		{
+			if (*reinterpret_cast<const FIntPoint*>(Tiles.GetKeyPtr(It)) == Index)
+			{
+				FProperty* UnitProperty = nullptr;
+				void* UnitPtr = KeepersReflection::FindValuePtr(TileProperty->Struct, Tiles.GetValuePtr(It), TEXT("UnitOnTile"), &UnitProperty);
+				if (const FObjectPropertyBase* UnitObject = CastField<FObjectPropertyBase>(UnitProperty))
+				{
+					Clicked = UnitObject->GetObjectPropertyValue(UnitPtr);
+				}
+				break;
+			}
+		}
+	}
+	if (!Clicked || Clicked == Current)
+	{
+		return false;
+	}
+
+	// Only between player-controlled units of the same team.
+	int32 ClickedTeam = -1;
+	int32 CurrentTeam = -2;
+	KeepersReflection::GetInt(Clicked->GetClass(), Clicked, TEXT("TeamIndex"), ClickedTeam);
+	KeepersReflection::GetInt(Current->GetClass(), Current, TEXT("TeamIndex"), CurrentTeam);
+	if (ClickedTeam != CurrentTeam || KeepersReflection::GetObject(Clicked, TEXT("Ai")) || KeepersReflection::GetObject(Current, TEXT("Ai")))
+	{
+		return false;
+	}
+
+	// The current unit must not be walking.
+	if (FArrayProperty* PathProperty = CastField<FArrayProperty>(KeepersReflection::FindMember(Current->GetClass(), TEXT("CurrentPathToFollow"))))
+	{
+		FScriptArrayHelper Path(PathProperty, PathProperty->ContainerPtrToValuePtr<void>(Current));
+		if (Path.Num() > 0)
+		{
+			return false;
+		}
+	}
+
+	// Units after the current one have not played this phase yet.
+	FArrayProperty* UnitsProperty = CastField<FArrayProperty>(KeepersReflection::FindMember(CombatSystem->GetClass(), TEXT("UnitsInCombat")));
+	FObjectPropertyBase* Inner = UnitsProperty ? CastField<FObjectPropertyBase>(UnitsProperty->Inner) : nullptr;
+	if (!Inner)
+	{
+		return false;
+	}
+	FScriptArrayHelper Helper(UnitsProperty, UnitsProperty->ContainerPtrToValuePtr<void>(CombatSystem));
+	TArray<UObject*> Units;
+	for (int32 I = 0; I < Helper.Num(); ++I)
+	{
+		Units.Add(Inner->GetObjectPropertyValue(Helper.GetRawPtr(I)));
+	}
+	const int32 CurrentIndex = Units.IndexOfByKey(Current);
+	const int32 ClickedIndex = Units.IndexOfByKey(Clicked);
+	if (CurrentIndex == INDEX_NONE || ClickedIndex <= CurrentIndex)
+	{
+		return false;
+	}
+	bool bAlive = true;
+	KeepersReflection::FCall IsAlive(Clicked, TEXT("IsAlive"));
+	if (IsAlive.Call())
+	{
+		IsAlive.Get<bool>(TEXT("IsAlive"), bAlive);
+	}
+	if (!bAlive)
+	{
+		return false;
+	}
+
+	Units.RemoveAt(ClickedIndex);
+	Units.Insert(Clicked, CurrentIndex);
+	for (int32 I = 0; I < Units.Num(); ++I)
+	{
+		Inner->SetObjectPropertyValue(Helper.GetRawPtr(I), Units[I]);
+	}
+
+	KeepersReflection::FCall Deactivate(Current, TEXT("SetIsActiveInCombat"));
+	Deactivate.Set<bool>(TEXT("IsActiveInCombat"), false);
+	Deactivate.Call();
+
+	KeepersReflection::SetObject(CombatSystem, TEXT("CurrentUnit"), Clicked);
+	KeepersReflection::FCall(Clicked, TEXT("TurnStarted")).Call();
+	KeepersReflection::BroadcastObjectEvent(CombatSystem, TEXT("OnUnitTurnStarted"), Clicked);
+	// Rebuilds the turn order bar.
+	KeepersReflection::BroadcastObjectEvent(CombatSystem, TEXT("OnUnitTeamsChanged"), nullptr);
+
+	UE_LOG(LogKeepersCombat, Log, TEXT("Control switched from %s to %s"), *Current->GetName(), *Clicked->GetName());
+	return true;
+}
+
 void UKeepersCombatLibrary::SaveIntent(UObject* UnitAi)
 {
 	const UScriptStruct* CastingStruct = nullptr;

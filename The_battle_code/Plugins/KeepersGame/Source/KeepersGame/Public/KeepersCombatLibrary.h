@@ -20,6 +20,15 @@ public:
 	static void SortUnitsInCombatByTeam(UObject* CombatSystem);
 
 	/**
+	 * Heroes act in any order during the player phase (called from Action_Cbt_Move.ExecuteAction).
+	 * Clicking a hero of the current team that has not played this phase yet hands control to it:
+	 * it takes the current unit's place in UnitsInCombat, and the current unit keeps its remaining
+	 * MP/AP and plays right after. Returns true when control switched (the click is not a move).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Combat", meta = (DefaultToSelf = "Action"))
+	static bool TrySwitchToUnitAt(UObject* Action, FIntPoint Index);
+
+	/**
 	 * Enemy intents, called from BP_UnitAi's AiFlow graph.
 	 *
 	 * SaveIntent: the AI reached its casting spot; instead of attacking now it remembers

@@ -30,6 +30,15 @@ namespace KeepersReflection
 	/** Reads a byte-sized enum value (Blueprint enums) from a struct value. */
 	KEEPERSGAME_API bool GetEnumByte(const UStruct* Struct, const void* Container, const FString& Name, uint8& OutValue);
 
+	/** Sets a Blueprint object variable. */
+	KEEPERSGAME_API bool SetObject(UObject* Object, const FString& Name, UObject* Value);
+
+	/**
+	 * Broadcasts a Blueprint event dispatcher (multicast delegate variable) whose only parameter is an object,
+	 * e.g. BP_CombatSystem.OnUnitTurnStarted(Unit).
+	 */
+	KEEPERSGAME_API bool BroadcastObjectEvent(UObject* Object, const FString& DispatcherName, UObject* Argument);
+
 	/**
 	 * One call to a Blueprint function. Parameters are set and read by name.
 	 * Works for member functions and for static functions of Blueprint function libraries

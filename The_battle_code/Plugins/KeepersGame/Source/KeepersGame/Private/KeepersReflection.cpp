@@ -58,6 +58,52 @@ namespace KeepersReflection
 		return ObjectProperty && Ptr ? ObjectProperty->GetObjectPropertyValue(Ptr) : nullptr;
 	}
 
+	bool SetObject(UObject* Object, const FString& Name, UObject* Value)
+	{
+		FProperty* Property = nullptr;
+		void* Ptr = Object ? FindValuePtr(Object->GetClass(), Object, Name, &Property) : nullptr;
+		FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property);
+		if (!ObjectProperty || !Ptr)
+		{
+			return false;
+		}
+		ObjectProperty->SetObjectPropertyValue(Ptr, Value);
+		return true;
+	}
+
+	bool BroadcastObjectEvent(UObject* Object, const FString& DispatcherName, UObject* Argument)
+	{
+		FMulticastDelegateProperty* Dispatcher = Object ? CastField<FMulticastDelegateProperty>(FindMember(Object->GetClass(), DispatcherName)) : nullptr;
+		UFunction* Signature = Dispatcher ? Dispatcher->SignatureFunction.Get() : nullptr;
+		if (!Signature)
+		{
+			return false;
+		}
+		const FMulticastScriptDelegate* Delegate = Dispatcher->GetMulticastDelegate(Dispatcher->ContainerPtrToValuePtr<void>(Object));
+		if (!Delegate)
+		{
+			return false;
+		}
+
+		uint8* Params = static_cast<uint8*>(FMemory::Malloc(FMath::Max<int32>(Signature->ParmsSize, 1), Signature->GetMinAlignment()));
+		FMemory::Memzero(Params, Signature->ParmsSize);
+		for (TFieldIterator<FProperty> It(Signature); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+		{
+			It->InitializeValue_InContainer(Params);
+			if (FObjectPropertyBase* ObjectParam = CastField<FObjectPropertyBase>(*It))
+			{
+				ObjectParam->SetObjectPropertyValue_InContainer(Params, Argument);
+			}
+		}
+		Delegate->ProcessDelegate<UObject>(Params);
+		for (TFieldIterator<FProperty> It(Signature); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+		{
+			It->DestroyValue_InContainer(Params);
+		}
+		FMemory::Free(Params);
+		return true;
+	}
+
 	bool GetInt(const UStruct* Struct, const void* Container, const FString& Name, int32& OutValue)
 	{
 		FProperty* Property = nullptr;
