@@ -1,4 +1,5 @@
 ﻿#include "KeepersTutorial.h"
+#include "KeepersLoadingScreen.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -204,7 +205,7 @@ void UKeepersTutorialSubsystem::StartTutorial(UObject* WorldContext)
 	bPendingTutorial = true;
 	if (UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr)
 	{
-		UGameplayStatics::OpenLevel(World, TEXT("/Game/Maps/Slice/L_Slice_Hex"));
+		KeepersLoading::OpenLevel(World, TEXT("/Game/Maps/Slice/L_Slice_Hex"));
 	}
 }
 

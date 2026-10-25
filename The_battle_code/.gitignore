@@ -77,3 +77,6 @@ DerivedDataCache/*
 
 # Local-only third-party editor plugins (licensed per user, not redistributed)
 Plugins/UnrealMCPServer/
+
+# Toony Tiny RTS Set (bought on Fab): its license does not allow publishing the source files; copy it in from the Fab library
+Content/Toony_Tiny_RTS_Set/

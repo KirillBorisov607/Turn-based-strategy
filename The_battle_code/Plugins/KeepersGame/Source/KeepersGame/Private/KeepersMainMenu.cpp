@@ -36,8 +36,16 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "KeepersCampaign.h"
+#include "KeepersBattleScenery.h"
+#include "KeepersHeroes.h"
+#include "KeepersLoadingScreen.h"
+#include "KeepersRockActor.h"
+#include "KeepersPlantActor.h"
 #include "KeepersSettings.h"
+#include "KeepersSquad.h"
 #include "KeepersStyle.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "KeepersTutorial.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Particles/ParticleSystem.h"
@@ -429,6 +437,13 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 				WeakThis->AskNewCampaign();
 			}
 		});
+		AddItem(TEXT("Отряд"), TEXT("Хранители, их способности, наряды и цвета. Кто пойдёт в следующий поход?"), [WeakThis]()
+		{
+			if (WeakThis.IsValid())
+			{
+				WeakThis->OpenSquad(false);
+			}
+		});
 		AddItem(TEXT("Обучение"), TEXT("Короткий бой со слизнями и подсказками: камера, ход, способности, намерения врагов."), [WeakThis]()
 		{
 			if (WeakThis.IsValid())
@@ -464,7 +479,7 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 			{
 				if (WeakThis.IsValid())
 				{
-					WeakThis->Leave([WeakThis, Level]() { if (WeakThis.IsValid()) { UGameplayStatics::OpenLevel(WeakThis.Get(), Level); } });
+					WeakThis->Leave([WeakThis, Level]() { if (WeakThis.IsValid()) { KeepersLoading::OpenLevel(WeakThis.Get(), Level); } });
 				}
 			});
 		}
@@ -487,16 +502,21 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 
 void UKeepersMainMenuWidget::AddSettings()
 {
+	AddSettingRows(this, List, 21.f);
+}
+
+void UKeepersMainMenuWidget::AddSettingRows(UUserWidget* Owner, UVerticalBox* Target, float LeftPadding)
+{
 	UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
-	if (!Settings)
+	if (!Settings || !Owner || !Target)
 	{
 		return;
 	}
-	auto AddRow = [this](const TCHAR* Label, TArray<FText> Options, int32 Current, TFunction<void(int32)> OnChanged)
+	auto AddRow = [Owner, Target, LeftPadding](const TCHAR* Label, TArray<FText> Options, int32 Current, TFunction<void(int32)> OnChanged)
 	{
-		UKeepersSettingRow* Row = CreateWidget<UKeepersSettingRow>(this, UKeepersSettingRow::StaticClass());
+		UKeepersSettingRow* Row = CreateWidget<UKeepersSettingRow>(Owner, UKeepersSettingRow::StaticClass());
 		Row->Setup(FText::FromString(Label), MoveTemp(Options), Current, MoveTemp(OnChanged));
-		List->AddChildToVerticalBox(Row)->SetPadding(FMargin(21.f, 3.f, 0.f, 3.f));
+		Target->AddChildToVerticalBox(Row)->SetPadding(FMargin(LeftPadding, 3.f, 0.f, 3.f));
 	};
 	auto Texts = [](std::initializer_list<const TCHAR*> Lines)
 	{
@@ -556,7 +576,7 @@ void UKeepersMainMenuWidget::AddSettings()
 	{
 		Volumes.Add(FText::FromString(FString::Printf(TEXT("%d%%"), Percent)));
 	}
-	TWeakObjectPtr<UKeepersMainMenuWidget> WeakThis(this);
+	TWeakObjectPtr<UUserWidget> WeakThis(Owner);
 	AddRow(TEXT("Громкость"), MoveTemp(Volumes), FMath::RoundToInt(KeepersSettings::GetVolume() * 10.f), [WeakThis](int32 Index)
 	{
 		if (WeakThis.IsValid())
@@ -579,8 +599,58 @@ void UKeepersMainMenuWidget::AskNewCampaign()
 void UKeepersMainMenuWidget::HandleConfirmYes()
 {
 	Confirm->SetVisibility(ESlateVisibility::Collapsed);
+	// A new run starts with gathering the squad.
+	OpenSquad(true);
+}
+
+void UKeepersMainMenuWidget::OpenSquad(bool bStartCampaign)
+{
+	APlayerController* Player = GetOwningPlayer();
+	if (Squad || !Player)
+	{
+		return;
+	}
+	Squad = CreateWidget<UKeepersSquadWidget>(Player, UKeepersSquadWidget::StaticClass());
+	Squad->Scene = Scene;
+	Squad->bStartsCampaign = bStartCampaign;
 	TWeakObjectPtr<UKeepersMainMenuWidget> WeakThis(this);
-	Leave([WeakThis]() { if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get())) { Campaign->StartNewCampaign(); } });
+	Squad->OnBack = [WeakThis]()
+	{
+		if (!WeakThis.IsValid() || !WeakThis->Squad)
+		{
+			return;
+		}
+		WeakThis->Squad->RemoveFromParent();
+		WeakThis->Squad = nullptr;
+		WeakThis->SetVisibility(ESlateVisibility::Visible);
+		WeakThis->ShowPage(EPage::Main);
+		WeakThis->SetFocus();
+	};
+	Squad->OnStart = [WeakThis, bStartCampaign]()
+	{
+		if (!WeakThis.IsValid() || !WeakThis->Squad)
+		{
+			return;
+		}
+		if (!bStartCampaign)
+		{
+			WeakThis->Squad->OnBack();
+			return;
+		}
+		WeakThis->Squad->SetVisibility(ESlateVisibility::HitTestInvisible);
+		WeakThis->Leave([WeakThis]() { if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get())) { Campaign->StartNewCampaign(); } });
+	};
+	SetVisibility(ESlateVisibility::Collapsed);
+	Squad->AddToViewport(6);
+	if (AKeepersMenuScene* MenuScene = Scene.Get())
+	{
+		MenuScene->SetShot(3);
+	}
+	FInputModeGameAndUI Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	Mode.SetHideCursorDuringCapture(false);
+	Mode.SetWidgetToFocus(Squad->TakeWidget());
+	Player->SetInputMode(Mode);
 }
 
 void UKeepersMainMenuWidget::HandleConfirmNo()
@@ -647,6 +717,14 @@ void AKeepersMenuScene::BeginPlay()
 
 	BuildCamp();
 	SetEveningLight();
+	// The island streams in a moment later; the podium and the seats need its ground.
+	FTimerHandle StageTimer;
+	GetWorldTimerManager().SetTimer(StageTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		BuildSquadStage();
+		RefreshCamp();
+		UKeepersBattleScenerySubsystem::SurroundField(*GetWorld());
+	}), 0.5f, false);
 	KeepersSettings::ApplyVolume(this);
 
 	APlayerController* Player = GetWorld()->GetFirstPlayerController();
@@ -691,13 +769,13 @@ UStaticMeshComponent* AKeepersMenuScene::AddMesh(const TCHAR* MeshPath, const FT
 	return Component;
 }
 
-void AKeepersMenuScene::AddUnit(const TCHAR* Name, const FVector& Offset, float Turn, float Scale)
+USkeletalMeshComponent* AKeepersMenuScene::AddUnit(const TCHAR* Name, const FVector& Offset, float Turn, float Scale)
 {
 	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("/Game/Art/Units/%s/SK_%s.SK_%s"), Name, Name, Name));
 	UAnimSequence* Idle = LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("/Game/Art/Units/%s/AN_%s_Idle.AN_%s_Idle"), Name, Name, Name));
 	if (!Mesh)
 	{
-		return;
+		return nullptr;
 	}
 	USkeletalMeshComponent* Component = NewObject<USkeletalMeshComponent>(this);
 	Component->SetSkeletalMesh(Mesh);
@@ -714,6 +792,7 @@ void AKeepersMenuScene::AddUnit(const TCHAR* Name, const FVector& Offset, float 
 		// Out of step, so the three do not breathe in unison.
 		Component->SetPosition(FMath::FRandRange(0.f, Idle->GetPlayLength()));
 	}
+	return Component;
 }
 
 void AKeepersMenuScene::BuildCamp()
@@ -807,11 +886,458 @@ void AKeepersMenuScene::BuildCamp()
 	AddSound(TEXT("/Game/UltimateMenu/Sounds/Fire_Sparks01_Cue.Fire_Sparks01_Cue"), 0.5f);
 	AddSound(TEXT("/Game/UltimateMenu/Sounds/Starter_Background_Cue.Starter_Background_Cue"), 0.35f);
 
-	// The Keepers around the fire, facing it, and a chicken that came for the warmth.
-	AddUnit(TEXT("Warrior"), FVector(30.f, -120.f, 0.f), 10.f, 0.42f);
-	AddUnit(TEXT("Ranger"), FVector(-160.f, 90.f, 0.f), -15.f, 0.42f);
-	AddUnit(TEXT("Priest"), FVector(-150.f, -85.f, 0.f), 15.f, 0.42f);
+	// The squad around the fire (RefreshCamp) and a chicken that came for the warmth.
 	AddUnit(TEXT("Chicken"), FVector(110.f, 150.f, 0.f), 70.f, 0.4f);
+	RefreshCamp();
+}
+
+UKeepersFigureComponent* AKeepersMenuScene::AddFigure(const FVector& Location, float Yaw, float Scale)
+{
+	UKeepersFigureComponent* Figure = NewObject<UKeepersFigureComponent>(this);
+	Figure->SetupAttachment(RootComponent);
+	Figure->SetWorldLocation(Location);
+	// Figures look along +Y; Yaw is the direction they face.
+	Figure->SetWorldRotation(FRotator(0.f, Yaw + MeshYawOffset, 0.f));
+	Figure->SetWorldScale3D(FVector(Scale));
+	Figure->RegisterComponent();
+	return Figure;
+}
+
+float AKeepersMenuScene::GroundZ(const FVector& Location) const
+{
+	FHitResult Hit;
+	FCollisionQueryParams Params(TEXT("KeepersMenuGround"), false, this);
+	// Start low: tree crowns over the camp must not count as ground.
+	if (GetWorld()->LineTraceSingleByChannel(Hit, Location + FVector(0.f, 0.f, 120.f), Location - FVector(0.f, 0.f, 1200.f), ECC_Visibility, Params))
+	{
+		return Hit.ImpactPoint.Z;
+	}
+	return Location.Z;
+}
+
+void AKeepersMenuScene::RefreshCamp()
+{
+	for (UKeepersFigureComponent* Figure : CampFigures)
+	{
+		if (Figure)
+		{
+			Figure->DestroyComponent();
+		}
+	}
+	CampFigures.Reset();
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(this);
+	if (!Party)
+	{
+		return;
+	}
+	// Seats around the fire; each Keeper faces the flames, turned a little for variety.
+	const FVector Seats[] = { FVector(30.f, -120.f, 0.f), FVector(-160.f, 90.f, 0.f), FVector(-150.f, -85.f, 0.f) };
+	const float Turns[] = { 10.f, -15.f, 15.f };
+	for (int32 I = 0; I < Party->GetParty().Num() && I < UE_ARRAY_COUNT(Seats); ++I)
+	{
+		const FName Hero = Party->GetParty()[I];
+		FVector Location = CampCenter + Seats[I];
+		Location.Z = GroundZ(Location);
+		UKeepersFigureComponent* Figure = AddFigure(Location, (-Seats[I]).Rotation().Yaw + Turns[I], FigureScale);
+		Figure->SetLook(Party->GetLook(Hero));
+		Figure->SetColor(Party->GetColor(Hero));
+		CampFigures.Add(Figure);
+	}
+}
+
+void AKeepersMenuScene::BuildSquadStage()
+{
+	// The podium: a spot in front of the fire, the camera looks at it from the side of the main shot.
+	PodiumLocation = CampCenter + PodiumOffset;
+	PodiumLocation.Z = GroundZ(PodiumLocation);
+	const FVector ToCamera = SquadCameraDirection.GetSafeNormal2D();
+	// Screen right as the squad camera sees it.
+	const FVector Right = FRotationMatrix(FRotator(0.f, (-ToCamera).Rotation().Yaw, 0.f)).GetScaledAxis(EAxis::Y);
+	// The camera looks a little right of the hero, so the target slime is in the free middle of the screen too.
+	ShotTargets[3] = PodiumLocation - CampCenter + Right * 24.f + FVector(0.f, 0.f, SquadLookHeight);
+	ShotLocations[3] = PodiumLocation - CampCenter + Right * 24.f + ToCamera * SquadCameraDistance + FVector(0.f, 0.f, SquadCameraHeight);
+	PreviewBaseYaw = ToCamera.Rotation().Yaw;
+
+	Preview = AddFigure(PodiumLocation, PreviewBaseYaw, FigureScale);
+	Preview->SetVisibility(false, true);
+
+	// The fire is behind the hero: a soft key light from the camera side, a little to the left.
+	const FVector Left = FRotationMatrix(FRotator(0.f, (-ToCamera).Rotation().Yaw, 0.f)).GetScaledAxis(EAxis::Y) * -1.f;
+	PodiumLight = NewObject<UPointLightComponent>(this);
+	PodiumLight->SetupAttachment(RootComponent);
+	PodiumLight->SetWorldLocation(PodiumLocation + ToCamera * 170.f + Left * 90.f + FVector(0.f, 0.f, 150.f));
+	PodiumLight->SetLightColor(FLinearColor(1.f, 0.86f, 0.72f));
+	PodiumLight->SetIntensity(5000.f);
+	PodiumLight->SetAttenuationRadius(520.f);
+	PodiumLight->SetCastShadows(false);
+	PodiumLight->SetVisibility(false);
+	PodiumLight->RegisterComponent();
+
+	// A slime to show abilities on, to the right of the hero and further from the camera.
+	TargetLocation = PodiumLocation + Right * 80.f - ToCamera * 110.f;
+	TargetLocation.Z = GroundZ(TargetLocation);
+	TargetSlime = AddUnit(TEXT("Slime"), TargetLocation - CampCenter, 0.f, 0.32f);
+	if (TargetSlime)
+	{
+		TargetSlime->SetWorldRotation(FRotator(0.f, (PodiumLocation - TargetLocation).Rotation().Yaw + MeshYawOffset, 0.f));
+		TargetSlime->SetVisibility(false);
+	}
+
+	// A small studio high above the island: every hero stands there in front of its own camera, the
+	// cards show these live pictures.
+	const FVector Studio = CampCenter + FVector(0.f, 0.f, 6000.f);
+	UPointLightComponent* StudioLight = NewObject<UPointLightComponent>(this);
+	StudioLight->SetupAttachment(RootComponent);
+	StudioLight->SetWorldLocation(Studio + FVector(-200.f, -400.f, 300.f));
+	StudioLight->SetIntensity(60000.f);
+	StudioLight->SetAttenuationRadius(5000.f);
+	StudioLight->SetLightColor(FLinearColor(1.f, 0.85f, 0.7f));
+	StudioLight->SetCastShadows(false);
+	StudioLight->RegisterComponent();
+
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(this);
+	int32 Index = 0;
+	for (const FKeepersHeroDef& Hero : KeepersHeroes::All())
+	{
+		const FVector Spot = Studio + FVector(Index++ * 400.f, 0.f, 0.f);
+		// Facing -Y, towards the camera.
+		UKeepersFigureComponent* Figure = AddFigure(Spot, -90.f, 1.f);
+		Figure->SetLook(Party ? Party->GetLook(Hero.Id) : Hero.Looks[0]);
+		Figure->SetColor(Party ? Party->GetColor(Hero.Id) : FName(TEXT("Blue")));
+		StudioFigures.Add(Hero.Id, Figure);
+
+		UTextureRenderTarget2D* Target = NewObject<UTextureRenderTarget2D>(this);
+		Target->InitCustomFormat(240, 314, PF_B8G8R8A8, true);
+		Target->ClearColor = FLinearColor(0.f, 0.f, 0.f, 1.f);
+		Portraits.Add(Hero.Id, Target);
+
+		USceneCaptureComponent2D* Capture = NewObject<USceneCaptureComponent2D>(this);
+		Capture->SetupAttachment(RootComponent);
+		Capture->SetWorldLocation(Spot + FVector(0.f, -235.f, 128.f));
+		Capture->SetWorldRotation(FRotator(-4.f, 90.f, 0.f));
+		Capture->FOVAngle = 36.f;
+		Capture->TextureTarget = Target;
+		Capture->CaptureSource = SCS_FinalColorLDR;
+		Capture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+		Capture->ShowOnlyComponents.Append(Figure->GetParts());
+		Capture->ShowFlags.SetAtmosphere(false);
+		Capture->ShowFlags.SetFog(false);
+		Capture->ShowFlags.SetEyeAdaptation(false);
+		Capture->bCaptureEveryFrame = true;
+		Capture->RegisterComponent();
+		Capture->ComponentTags.Add(Hero.Id);
+	}
+}
+
+UTextureRenderTarget2D* AKeepersMenuScene::GetPortrait(FName Hero) const
+{
+	const TObjectPtr<UTextureRenderTarget2D>* Found = Portraits.Find(Hero);
+	return Found ? Found->Get() : nullptr;
+}
+
+void AKeepersMenuScene::ShowPreview(FName Hero)
+{
+	PreviewHero = Hero;
+	PreviewYaw = 0.f;
+	FaceTargetTime = 0.f;
+	RefreshHero(Hero);
+	if (Preview)
+	{
+		Preview->SetVisibility(true, true);
+	}
+	if (TargetSlime)
+	{
+		TargetSlime->SetVisibility(true);
+	}
+}
+
+void AKeepersMenuScene::RefreshHero(FName Hero)
+{
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(this);
+	if (!Party)
+	{
+		return;
+	}
+	const FKeepersLook Look = Party->GetLook(Hero);
+	const FName Color = Party->GetColor(Hero);
+	if (Preview && Hero == PreviewHero)
+	{
+		Preview->SetLook(Look);
+		Preview->SetColor(Color);
+	}
+	if (const TObjectPtr<UKeepersFigureComponent>* Studio = StudioFigures.Find(Hero))
+	{
+		(*Studio)->SetLook(Look);
+		(*Studio)->SetColor(Color);
+		// New attachments: tell the hero's portrait camera what to film.
+		TArray<USceneCaptureComponent2D*> Captures;
+		GetComponents(Captures);
+		for (USceneCaptureComponent2D* Capture : Captures)
+		{
+			if (Capture->ComponentHasTag(Hero))
+			{
+				Capture->ShowOnlyComponents.Reset();
+				Capture->ShowOnlyComponents.Append((*Studio)->GetParts());
+			}
+		}
+	}
+	if (Party->IsInParty(Hero))
+	{
+		RefreshCamp();
+	}
+}
+
+void AKeepersMenuScene::PlayPreview(EKeepersPose Pose)
+{
+	if (Preview)
+	{
+		Preview->Play(Pose);
+	}
+}
+
+void AKeepersMenuScene::RotatePreview(float DeltaYaw)
+{
+	PreviewYaw += DeltaYaw;
+}
+
+void AKeepersMenuScene::PlayAbility(FName Hero, FName Spell)
+{
+	const FKeepersSpellInfo* Info = KeepersHeroes::FindSpell(Spell);
+	if (!Preview || !Info)
+	{
+		return;
+	}
+	EKeepersPose Pose = Info->Pose;
+	if (Pose == EKeepersPose::Attack && Preview->GetLook().AnimSet == EKeepersAnimSet::Staff)
+	{
+		Pose = EKeepersPose::Cast;
+	}
+	Preview->Play(Pose);
+	FaceTargetTime = 2.2f;
+
+	UMaterialInterface* Glow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/M_TranslucentColor.M_TranslucentColor"));
+	auto MakeGlowMesh = [this, Glow](const TCHAR* MeshPath, const FVector& Scale, const FLinearColor& Color) -> UStaticMeshComponent*
+	{
+		UStaticMeshComponent* Mesh = AddMesh(MeshPath, FTransform(FRotator::ZeroRotator, FVector::ZeroVector, Scale), nullptr);
+		if (Mesh && Glow)
+		{
+			UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Glow, this);
+			Material->SetVectorParameterValue(TEXT("Color"), Color);
+			Material->SetScalarParameterValue(TEXT("Opacity"), 0.9f);
+			Mesh->SetMaterial(0, Material);
+			Mesh->SetCastShadow(false);
+			Mesh->SetVisibility(false);
+		}
+		return Mesh;
+	};
+	auto AddLight = [this](const FVector& Location, const FLinearColor& Color, float Intensity, float Delay, float Duration)
+	{
+		UPointLightComponent* Light = NewObject<UPointLightComponent>(this);
+		Light->SetupAttachment(RootComponent);
+		Light->SetWorldLocation(Location);
+		Light->SetLightColor(Color);
+		Light->SetIntensity(0.f);
+		Light->SetAttenuationRadius(400.f);
+		Light->SetCastShadows(false);
+		Light->RegisterComponent();
+		FEffect Effect;
+		Effect.Light = Light;
+		Effect.LightIntensity = Intensity;
+		Effect.Delay = Delay;
+		Effect.Duration = Duration;
+		Effects.Add(Effect);
+	};
+	auto AddProjectile = [this, &MakeGlowMesh](const TCHAR* MeshPath, const FVector& Scale, const FLinearColor& Color, float Delay, float Duration, bool bArc)
+	{
+		FEffect Effect;
+		Effect.Component = MakeGlowMesh(MeshPath, Scale, Color);
+		Effect.From = PodiumLocation + FVector(0.f, 0.f, 70.f * FigureScale);
+		Effect.To = TargetLocation + FVector(0.f, 0.f, 25.f);
+		Effect.Delay = Delay;
+		Effect.Duration = Duration;
+		Effect.bArc = bArc;
+		Effect.bHitsTarget = true;
+		Effects.Add(Effect);
+	};
+	auto AddHit = [this](float Delay)
+	{
+		FEffect Effect;
+		Effect.Delay = Delay;
+		Effect.Duration = 0.01f;
+		Effect.bHitsTarget = true;
+		Effects.Add(Effect);
+	};
+	auto AddActorEffect = [this](AActor* Actor, float Life)
+	{
+		FEffect Effect;
+		Effect.SpawnedActor = Actor;
+		Effect.Duration = Life;
+		Effects.Add(Effect);
+		SpawnedEffects.Add(Actor);
+	};
+	const FVector Middle = FMath::Lerp(PodiumLocation, TargetLocation, 0.55f);
+	const FString Id = Spell.ToString();
+
+	if (Id == TEXT("LongRangeArrow") || Id == TEXT("ShortRangeArrow") || Id == TEXT("SwordThrow"))
+	{
+		AddProjectile(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.03f, 0.03f, 0.35f), FLinearColor(3.f, 2.4f, 1.2f), 0.45f, Id == TEXT("LongRangeArrow") ? 0.55f : 0.3f, Id == TEXT("LongRangeArrow"));
+	}
+	else if (Id == TEXT("SlimeBall") || Id == TEXT("Fireball") || Id == TEXT("ChainLightning") || Id == TEXT("WindGust"))
+	{
+		const FLinearColor Color = Id == TEXT("Fireball") ? FLinearColor(8.f, 2.f, 0.3f) : Id == TEXT("SlimeBall") ? FLinearColor(1.f, 4.f, 0.5f) : FLinearColor(1.5f, 3.f, 8.f);
+		AddProjectile(TEXT("/Engine/BasicShapes/Sphere.Sphere"), FVector(0.14f), Color, 0.5f, 0.4f, Id == TEXT("Fireball"));
+		AddLight(TargetLocation + FVector(0.f, 0.f, 40.f), Color.GetClamped(0.f, 1.f), 8000.f, 0.9f, 0.5f);
+	}
+	else if (Id == TEXT("Heal"))
+	{
+		AddLight(PodiumLocation + FVector(0.f, 0.f, 60.f), FLinearColor(0.4f, 1.f, 0.4f), 9000.f, 0.4f, 1.2f);
+	}
+	else if (Id == TEXT("RaiseRock"))
+	{
+		if (AKeepersRockActor* Rock = GetWorld()->SpawnActor<AKeepersRockActor>(AKeepersRockActor::StaticClass(), FTransform(Middle)))
+		{
+			Rock->SetActorScale3D(FVector(0.35f));
+			Rock->Rise(FVector(Middle.X, Middle.Y, GroundZ(Middle)), GroundZ(Middle) + 70.f);
+			AddActorEffect(Rock, 2.6f);
+		}
+	}
+	else if (Id == TEXT("Sprout") || Id == TEXT("Roots"))
+	{
+		const bool bTree = Id == TEXT("Sprout");
+		const FVector Spot = bTree ? Middle : TargetLocation;
+		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, bTree ? TEXT("/Game/Art/Meshes/SM_Tree_02.SM_Tree_02") : TEXT("/Game/Art/Meshes/SM_Bush_01.SM_Bush_01"));
+		if (AKeepersPlantActor* Plant = Mesh ? GetWorld()->SpawnActor<AKeepersPlantActor>(AKeepersPlantActor::StaticClass(), FTransform(FVector(Spot.X, Spot.Y, GroundZ(Spot)))) : nullptr)
+		{
+			Plant->Grow(Mesh, bTree ? 0.3f : 0.32f, false);
+			AddActorEffect(Plant, 2.6f);
+		}
+		if (!bTree)
+		{
+			AddHit(0.7f);
+		}
+	}
+	else if (Id == TEXT("Gust"))
+	{
+		AddLight(Middle + FVector(0.f, 0.f, 50.f), FLinearColor(0.6f, 0.85f, 1.f), 5000.f, 0.4f, 0.5f);
+		AddHit(0.55f);
+		TargetPush = -1.f; // starts with the hit
+	}
+	else if (Info->Pose == EKeepersPose::Cast)
+	{
+		AddLight(TargetLocation + FVector(0.f, 0.f, 40.f), FLinearColor(0.8f, 0.5f, 1.f), 7000.f, 0.6f, 0.6f);
+		AddHit(0.7f);
+	}
+	else
+	{
+		// Melee: the blow lands in the middle of the swing.
+		AddHit(0.4f);
+	}
+}
+
+void AKeepersMenuScene::TickEffects(float DeltaTime)
+{
+	for (int32 I = Effects.Num() - 1; I >= 0; --I)
+	{
+		FEffect& Effect = Effects[I];
+		Effect.Age += DeltaTime;
+		const float T = (Effect.Age - Effect.Delay) / FMath::Max(Effect.Duration, 0.01f);
+		if (T < 0.f)
+		{
+			continue;
+		}
+		if (UPrimitiveComponent* Component = Effect.Component.Get())
+		{
+			Component->SetVisibility(true);
+			FVector Location = FMath::Lerp(Effect.From, Effect.To, FMath::Min(T, 1.f));
+			if (Effect.bArc)
+			{
+				Location.Z += FMath::Sin(FMath::Min(T, 1.f) * PI) * 90.f;
+			}
+			const FVector Direction = (Effect.To - Effect.From).GetSafeNormal();
+			Component->SetWorldLocationAndRotation(Location, FRotationMatrix::MakeFromZ(Direction).Rotator());
+		}
+		if (UPointLightComponent* Light = Effect.Light.Get())
+		{
+			Light->SetIntensity(Effect.LightIntensity * FMath::Sin(FMath::Clamp(T, 0.f, 1.f) * PI));
+		}
+		if (T >= 1.f)
+		{
+			if (Effect.bHitsTarget)
+			{
+				TargetShake = 0.45f;
+				if (TargetPush < 0.f)
+				{
+					TargetPush = 1.f;
+				}
+			}
+			if (UPrimitiveComponent* Component = Effect.Component.Get())
+			{
+				Component->DestroyComponent();
+			}
+			if (UPointLightComponent* Light = Effect.Light.Get())
+			{
+				Light->DestroyComponent();
+			}
+			if (Effect.SpawnedActor)
+			{
+				SpawnedEffects.Remove(Effect.SpawnedActor);
+				Effect.SpawnedActor->Destroy();
+			}
+			Effects.RemoveAtSwap(I);
+		}
+	}
+
+	// The preview hero turns to the slime while showing an ability, then back to the camera.
+	FaceTargetTime = FMath::Max(FaceTargetTime - DeltaTime, 0.f);
+	FaceTargetBlend = FMath::FInterpTo(FaceTargetBlend, FaceTargetTime > 0.f ? 1.f : 0.f, DeltaTime, 7.f);
+	if (Preview)
+	{
+		const float TargetYaw = (TargetLocation - PodiumLocation).Rotation().Yaw;
+		const float FrontYaw = PreviewBaseYaw + PreviewYaw;
+		const float Yaw = FrontYaw + FMath::FindDeltaAngleDegrees(FrontYaw, TargetYaw) * FaceTargetBlend;
+		Preview->SetWorldRotation(FRotator(0.f, Yaw + MeshYawOffset, 0.f));
+	}
+
+	// The slime squashes when hit and slides back from a gust.
+	TargetShake = FMath::Max(TargetShake - DeltaTime, 0.f);
+	TargetPush = TargetPush > 0.f ? FMath::Max(TargetPush - DeltaTime * 0.6f, 0.f) : TargetPush;
+	if (TargetSlime)
+	{
+		const float Wobble = FMath::Sin(TargetShake * 40.f) * TargetShake;
+		const FVector Away = (TargetLocation - PodiumLocation).GetSafeNormal2D();
+		const float Push = TargetPush > 0.f ? FMath::Sin(FMath::Min(TargetPush, 1.f) * PI) * 60.f : 0.f;
+		TargetSlime->SetWorldLocation(TargetLocation + Away * Push + FVector(0.f, 0.f, 0.f));
+		TargetSlime->SetWorldScale3D(FVector(0.32f * (1.f + Wobble * 0.5f), 0.32f * (1.f + Wobble * 0.5f), 0.32f * (1.f - Wobble * 0.6f)));
+	}
+}
+
+void AKeepersMenuScene::OpenSquadScreen(bool bStartCampaign)
+{
+	if (Menu)
+	{
+		Menu->OpenSquad(bStartCampaign);
+	}
+}
+
+void AKeepersMenuScene::TestSquad(FName Hero, int32 Ability)
+{
+	for (TObjectIterator<UKeepersSquadWidget> It; It; ++It)
+	{
+		if (It->GetWorld() == GetWorld() && It->IsInViewport())
+		{
+			if (!Hero.IsNone())
+			{
+				It->SelectHero(Hero);
+			}
+			if (const FKeepersHeroDef* Def = KeepersHeroes::Find(Hero.IsNone() ? PreviewHero : Hero))
+			{
+				if (Def->Spells.IsValidIndex(Ability))
+				{
+					PlayAbility(Def->Id, Def->Spells[Ability]);
+				}
+			}
+		}
+	}
 }
 
 void AKeepersMenuScene::SetEveningLight()
@@ -845,12 +1371,29 @@ void AKeepersMenuScene::ShowMenuPage(int32 Page)
 void AKeepersMenuScene::SetShot(int32 Shot)
 {
 	CurrentShot = ShotLocations.IsValidIndex(Shot) && ShotTargets.IsValidIndex(Shot) ? Shot : 0;
+	const bool bSquad = CurrentShot == 3;
+	if (PodiumLight)
+	{
+		PodiumLight->SetVisibility(bSquad);
+	}
+	if (!bSquad)
+	{
+		if (Preview)
+		{
+			Preview->SetVisibility(false, true);
+		}
+		if (TargetSlime)
+		{
+			TargetSlime->SetVisibility(false);
+		}
+	}
 }
 
 void AKeepersMenuScene::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	Time += DeltaTime;
+	TickEffects(DeltaTime);
 	if (!ShotLocations.IsValidIndex(CurrentShot) || !ShotTargets.IsValidIndex(CurrentShot))
 	{
 		return;

@@ -1,0 +1,168 @@
+#pragma once
+
+#include "GameFramework/SaveGame.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "KeepersFigure.h"
+#include "KeepersHeroes.generated.h"
+
+class ACharacter;
+
+/** An ability as the squad screen and tooltips describe it. */
+struct FKeepersSpellInfo
+{
+	/** E_Spell entry name ("SwordSlash"). */
+	FName Id;
+	FText Name;
+	FText Description;
+	/** Short numbers line: damage, range, cooldown. */
+	FText Numbers;
+	/** How a figure shows the ability. */
+	EKeepersPose Pose = EKeepersPose::Attack;
+};
+
+/** A hero of the roster. */
+struct FKeepersHeroDef
+{
+	/** Row of DT_DefaultUnitDataPerType for playable heroes ("Warrior"); a plain id for heroes still to come. */
+	FName Id;
+	FText Name;
+	FText Class;
+	FText Role;
+	FText Description;
+	/** E_UnitType of the hero in battle, INDEX_NONE while the hero has no battle unit yet. */
+	int32 UnitType = INDEX_NONE;
+	/** How the hero is opened, for locked cards. */
+	FText Unlock;
+	TArray<FName> Spells;
+	TArray<FKeepersLook> Looks;
+	/** Stats for heroes without a data table row. */
+	int32 Hp = 0;
+	int32 Mp = 0;
+	int32 Ap = 0;
+};
+
+/** Hero stats as the battle uses them. */
+struct FKeepersHeroStats
+{
+	int32 Hp = 0;
+	int32 Mp = 0;
+	int32 Ap = 0;
+};
+
+namespace KeepersHeroes
+{
+	KEEPERSGAME_API const TArray<FKeepersHeroDef>& All();
+	KEEPERSGAME_API const FKeepersHeroDef* Find(FName Id);
+	KEEPERSGAME_API const FKeepersHeroDef* FindByUnitType(int32 UnitType);
+	KEEPERSGAME_API const FKeepersSpellInfo* FindSpell(FName Id);
+
+	/** HP, movement and action points: from DT_DefaultUnitDataPerType when the hero has a row. */
+	KEEPERSGAME_API FKeepersHeroStats Stats(const FKeepersHeroDef& Hero);
+
+	/** E_UnitType of a battle unit, 255 if it has none. */
+	KEEPERSGAME_API uint8 UnitTypeOf(const UObject* Unit);
+}
+
+/** One hero's choices on the squad screen. */
+USTRUCT()
+struct FKeepersHeroChoice
+{
+	GENERATED_BODY()
+
+	UPROPERTY(SaveGame)
+	FName Hero;
+
+	UPROPERTY(SaveGame)
+	int32 Look = 0;
+
+	UPROPERTY(SaveGame)
+	FName Color = TEXT("Blue");
+};
+
+UCLASS()
+class KEEPERSGAME_API UKeepersPartySave : public USaveGame
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(SaveGame)
+	TArray<FKeepersHeroChoice> Choices;
+
+	/** Heroes in the squad, in slot order. */
+	UPROPERTY(SaveGame)
+	TArray<FName> Party;
+};
+
+/**
+ * The squad: which heroes go on the run and how each of them looks. Saved between sessions.
+ * Battles read it to dress the hero units (UKeepersHeroLookSubsystem).
+ */
+UCLASS()
+class KEEPERSGAME_API UKeepersPartySubsystem : public UGameInstanceSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	static UKeepersPartySubsystem* Get(const UObject* WorldContext);
+
+	static constexpr int32 SquadSize = 3;
+
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	/** Whether the hero can be taken into the squad now. */
+	bool IsUnlocked(FName Hero) const;
+
+	const TArray<FName>& GetParty() const { return Save->Party; }
+	bool IsInParty(FName Hero) const { return Save->Party.Contains(Hero); }
+	/** Puts the hero into the first free slot; false when the squad is full or the hero is locked. */
+	bool AddToParty(FName Hero);
+	void RemoveFromParty(FName Hero);
+
+	int32 GetLookIndex(FName Hero) const;
+	void SetLookIndex(FName Hero, int32 Look);
+	FName GetColor(FName Hero) const;
+	void SetColor(FName Hero, FName Color);
+
+	/** The look a hero wears now. */
+	FKeepersLook GetLook(FName Hero) const;
+
+	void WriteSave() const;
+
+private:
+	FKeepersHeroChoice& Choice(FName Hero);
+	const FKeepersHeroChoice* FindChoice(FName Hero) const;
+
+	UPROPERTY()
+	TObjectPtr<UKeepersPartySave> Save;
+};
+
+/**
+ * Dresses battle units in the Toony Tiny RTS Set: every hero unit (Страж, Следопыт, Друид) gets a figure
+ * assembled from parts, the old mesh is hidden but keeps animating, and the figure mirrors its animation
+ * state (idle, walk, attack, hit, death). Player heroes wear the squad's looks and colours, enemy heroes red.
+ */
+UCLASS()
+class KEEPERSGAME_API UKeepersHeroLookSubsystem : public UTickableWorldSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	virtual void Tick(float DeltaTime) override;
+	virtual TStatId GetStatId() const override;
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+
+private:
+	void Dress(ACharacter* Unit);
+
+	struct FDressed
+	{
+		TWeakObjectPtr<ACharacter> Unit;
+		TWeakObjectPtr<UKeepersFigureComponent> Figure;
+		uint8 LastState = 255;
+	};
+
+	TArray<FDressed> Dressed;
+	TSet<TWeakObjectPtr<ACharacter>> Seen;
+	float ScanTimer = 0.f;
+};

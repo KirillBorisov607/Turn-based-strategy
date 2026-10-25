@@ -1,4 +1,5 @@
 ﻿#include "KeepersCampaign.h"
+#include "KeepersLoadingScreen.h"
 
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -363,6 +364,6 @@ void UKeepersCampaignSubsystem::OpenLevel(FName Level) const
 {
 	if (UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr)
 	{
-		UGameplayStatics::OpenLevel(World, Level);
+		KeepersLoading::OpenLevel(World, Level);
 	}
 }

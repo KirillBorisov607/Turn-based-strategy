@@ -14,7 +14,9 @@ public class KeepersGame : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
-			"InputCore"
+			"InputCore",
+			"MoviePlayer",
+			"ImageCore"
 		});
 	}
 }

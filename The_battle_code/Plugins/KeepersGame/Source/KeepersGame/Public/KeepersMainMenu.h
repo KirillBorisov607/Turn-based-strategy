@@ -2,6 +2,7 @@
 
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/Actor.h"
+#include "KeepersFigure.h"
 #include "KeepersMainMenu.generated.h"
 
 class UBorder;
@@ -9,7 +10,9 @@ class UButton;
 class UCameraComponent;
 class UMaterialInstanceDynamic;
 class UPointLightComponent;
+class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class UTextureRenderTarget2D;
 class UTextBlock;
 class UVerticalBox;
 class AKeepersMenuScene;
@@ -108,6 +111,12 @@ public:
 
 	void ShowPage(EPage Page);
 
+	/** Graphics, screen, resolution, VSync and volume rows (also used by the pause menu). */
+	static void AddSettingRows(UUserWidget* Owner, UVerticalBox* Target, float LeftPadding);
+
+	/** Opens the squad screen; bStartCampaign: its main button starts a new campaign. */
+	void OpenSquad(bool bStartCampaign);
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
@@ -142,6 +151,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UBorder> Confirm;
+
+	UPROPERTY()
+	TObjectPtr<class UKeepersSquadWidget> Squad;
 };
 
 /**
@@ -164,8 +176,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers")
 	void ShowMenuPage(int32 Page);
 
-	/** Camera shot for a menu page (0 main, 1 quick battle, 2 settings). */
+	/** Camera shot for a menu page (0 main, 1 quick battle, 2 settings, 3 squad). */
 	void SetShot(int32 Shot);
+
+	/** Squad screen: the hero shown up close by the fire. */
+	void ShowPreview(FName Hero);
+	void PlayPreview(EKeepersPose Pose);
+	/** Plays an ability on the preview hero: its animation and a small effect on the target slime. */
+	void PlayAbility(FName Hero, FName Spell);
+	void RotatePreview(float DeltaYaw);
+	/** A hero's outfit or colour changed: updates the preview, the portrait and the hero at the fire. */
+	void RefreshHero(FName Hero);
+	/** The squad changed: the heroes sitting at the fire. */
+	void RefreshCamp();
+	/** Live portrait of a hero for the cards. */
+	UTextureRenderTarget2D* GetPortrait(FName Hero) const;
+
+	/** Opens the squad screen, for scripts and tests. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers")
+	void OpenSquadScreen(bool bStartCampaign);
+
+	/** Squad screen test hooks: choose a hero, play an ability by index. */
+	UFUNCTION(BlueprintCallable, Category = "Keepers")
+	void TestSquad(FName Hero, int32 Ability);
 
 	/** Where the camp fire burns. */
 	UPROPERTY(EditAnywhere, Category = "Keepers")
@@ -175,19 +208,96 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Keepers")
 	float MeshYawOffset = -90.f;
 
-	/** Camera shot per menu page (main, quick battle, settings), relative to CampCenter. */
+	/** Camera shot per menu page (main, quick battle, settings, squad), relative to CampCenter. */
 	UPROPERTY(EditAnywhere, Category = "Keepers")
-	TArray<FVector> ShotLocations = { FVector(980.f, -330.f, 390.f), FVector(2300.f, -900.f, 2000.f), FVector(520.f, -160.f, 220.f) };
+	TArray<FVector> ShotLocations = { FVector(980.f, -330.f, 390.f), FVector(2300.f, -900.f, 2000.f), FVector(520.f, -160.f, 220.f), FVector(520.f, -280.f, 100.f) };
 
-	/** Where each shot looks, relative to CampCenter. */
+	/** Where each shot looks, relative to CampCenter. The squad shot is placed around the podium at runtime. */
 	UPROPERTY(EditAnywhere, Category = "Keepers")
-	TArray<FVector> ShotTargets = { FVector(0.f, 150.f, 40.f), FVector(-300.f, 500.f, 0.f), FVector(0.f, 110.f, 50.f) };
+	TArray<FVector> ShotTargets = { FVector(0.f, 150.f, 40.f), FVector(-300.f, 500.f, 0.f), FVector(0.f, 110.f, 50.f), FVector(330.f, -150.f, 55.f) };
+
+	/** Squad shot: horizontal direction from the podium to the camera, distance and heights. */
+	UPROPERTY(EditAnywhere, Category = "Keepers")
+	FVector SquadCameraDirection = FVector(0.82f, -0.57f, 0.f);
+
+	UPROPERTY(EditAnywhere, Category = "Keepers")
+	float SquadCameraDistance = 420.f;
+
+	UPROPERTY(EditAnywhere, Category = "Keepers")
+	float SquadCameraHeight = 150.f;
+
+	UPROPERTY(EditAnywhere, Category = "Keepers")
+	float SquadLookHeight = 34.f;
+
+	/** Where the squad screen's hero stands, relative to CampCenter. */
+	UPROPERTY(EditAnywhere, Category = "Keepers")
+	FVector PodiumOffset = FVector(330.f, -150.f, 0.f);
+
+	/** Scale of the Toony figures in the camp. */
+	UPROPERTY(EditAnywhere, Category = "Keepers")
+	float FigureScale = 0.62f;
 
 private:
 	void BuildCamp();
+	void BuildSquadStage();
 	void SetEveningLight();
 	UStaticMeshComponent* AddMesh(const TCHAR* MeshPath, const FTransform& Transform, UMaterialInterface* Material);
-	void AddUnit(const TCHAR* Name, const FVector& Offset, float Turn, float Scale);
+	USkeletalMeshComponent* AddUnit(const TCHAR* Name, const FVector& Offset, float Turn, float Scale);
+	UKeepersFigureComponent* AddFigure(const FVector& Location, float Yaw, float Scale);
+	/** Ground height under a point of the island. */
+	float GroundZ(const FVector& Location) const;
+	void TickEffects(float DeltaTime);
+
+	FName PreviewHero;
+	float PreviewYaw = 0.f;
+	float PreviewBaseYaw = 0.f;
+	FVector PodiumLocation;
+	FVector TargetLocation;
+
+	/** A short-lived effect of a shown ability. */
+	struct FEffect
+	{
+		TWeakObjectPtr<UPrimitiveComponent> Component;
+		TWeakObjectPtr<UPointLightComponent> Light;
+		AActor* SpawnedActor = nullptr;
+		FVector From;
+		FVector To;
+		float Delay = 0.f;
+		float Age = 0.f;
+		float Duration = 0.5f;
+		bool bArc = false;
+		bool bHitsTarget = false;
+		float LightIntensity = 0.f;
+	};
+	TArray<FEffect> Effects;
+	float TargetShake = 0.f;
+	/** Seconds left of the preview hero facing the target slime (while showing an ability). */
+	float FaceTargetTime = 0.f;
+	float FaceTargetBlend = 0.f;
+	/** Gust pushes the slime back: how far, decaying. */
+	float TargetPush = 0.f;
+
+	UPROPERTY()
+	TObjectPtr<UKeepersFigureComponent> Preview;
+
+	/** Key light on the podium, on only in the squad shot. */
+	UPROPERTY()
+	TObjectPtr<UPointLightComponent> PodiumLight;
+
+	UPROPERTY()
+	TObjectPtr<USkeletalMeshComponent> TargetSlime;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UKeepersFigureComponent>> CampFigures;
+
+	UPROPERTY()
+	TMap<FName, TObjectPtr<UKeepersFigureComponent>> StudioFigures;
+
+	UPROPERTY()
+	TMap<FName, TObjectPtr<UTextureRenderTarget2D>> Portraits;
+
+	UPROPERTY()
+	TArray<TObjectPtr<AActor>> SpawnedEffects;
 
 	int32 CurrentShot = 0;
 	FVector CameraLocation;

@@ -19,6 +19,12 @@
 | `menu_page.py`, `menu_tune.py` | Открывают страницу главного меню и меняют ракурсы камеры в запущенной игре |
 | `bpedit.py` | Мини-клиент для правки графов блюпринтов (узлы, пины, связи) |
 | `edit_phases.py`, `edit_intents.py` | Правки графов, которые внесены в `BP_CombatSystem` и `BP_UnitAi` (повторный запуск ничего не меняет) |
+| `vpshot.py` | Снимок игрового вьюпорта со всем интерфейсом, включая Slate (`KeepersCaptureLibrary.CaptureViewport`), в `_logs/v_<имя>.png`; имя берётся из `ui_shot.txt` |
+| `squad_open.py`, `squad_probe.py` | Экран отряда в запущенном меню: `squad_arg.txt` = `open` или `test <Герой> <номер способности>`; печать фигур и камеры |
+| `load_view.py`, `plain_shot.py` | Кадры для экранов загрузки: камера игрока ставится над полем (`load_yaw.txt`: угол, расстояние, высота, наклон), снимок `HighResShot` |
+| `import_load.py` | Импорт `_logs/load/T_Load_*.png` в `/Game/Keepers/Loading` как UI-текстур |
+| `load_preview.py`, `pause_toggle.py` | Показать экран загрузки карты из `load_level.txt`; открыть/закрыть меню паузы |
+| `tt_lineup.py`, `capture.py`, `vshot.sh` | Ряды частей Toony Tiny RTS Set для выбора обликов, снимок редактора через SceneCapture |
 
 Пример полной проверки боя:
 
