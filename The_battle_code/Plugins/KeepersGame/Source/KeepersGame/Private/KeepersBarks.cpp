@@ -6,6 +6,7 @@
 #include "Components/WidgetComponent.h"
 #include "Engine/World.h"
 #include "KeepersReflection.h"
+#include "KeepersSettings.h"
 
 namespace KeepersBarks
 {
@@ -142,7 +143,8 @@ void AKeepersBarkActor::Tick(float DeltaSeconds)
 void UKeepersBarkLibrary::Bark(AActor* Unit, const FText& Text)
 {
 	UWorld* World = Unit ? Unit->GetWorld() : nullptr;
-	if (!World || !World->IsGameWorld() || Text.IsEmpty())
+	// The player can turn the heroes' lines off in the game settings.
+	if (!World || !World->IsGameWorld() || Text.IsEmpty() || KeepersSettings::Get(KeepersSettings::Barks) < 0.5f)
 	{
 		return;
 	}

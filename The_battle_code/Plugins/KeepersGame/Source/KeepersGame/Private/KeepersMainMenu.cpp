@@ -42,6 +42,7 @@
 #include "KeepersRockActor.h"
 #include "KeepersPlantActor.h"
 #include "KeepersSettings.h"
+#include "KeepersSettingsUI.h"
 #include "KeepersSquad.h"
 #include "KeepersStyle.h"
 #include "Components/SceneCaptureComponent2D.h"
@@ -453,7 +454,7 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 			}
 		});
 		AddItem(TEXT("Быстрый бой"), TEXT("Отдельные сражения без кампании."), Go(EPage::QuickBattle));
-		AddItem(TEXT("Настройки"), TEXT("Графика, экран и звук."), Go(EPage::Settings));
+		AddItem(TEXT("Настройки"), TEXT("Графика, звук, управление и игра."), Go(EPage::Settings));
 		AddItem(TEXT("Выход"), TEXT("Хранители подождут у костра."), [WeakThis]()
 		{
 			if (WeakThis.IsValid())
@@ -513,83 +514,13 @@ void UKeepersMainMenuWidget::AddSettings()
 
 void UKeepersMainMenuWidget::AddSettingRows(UUserWidget* Owner, UVerticalBox* Target, float LeftPadding)
 {
-	UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
-	if (!Settings || !Owner || !Target)
+	if (!Owner || !Target)
 	{
 		return;
 	}
-	auto AddRow = [Owner, Target, LeftPadding](const TCHAR* Label, TArray<FText> Options, int32 Current, TFunction<void(int32)> OnChanged)
-	{
-		UKeepersSettingRow* Row = CreateWidget<UKeepersSettingRow>(Owner, UKeepersSettingRow::StaticClass());
-		Row->Setup(FText::FromString(Label), MoveTemp(Options), Current, MoveTemp(OnChanged));
-		Target->AddChildToVerticalBox(Row)->SetPadding(FMargin(LeftPadding, 3.f, 0.f, 3.f));
-	};
-	auto Texts = [](std::initializer_list<const TCHAR*> Lines)
-	{
-		TArray<FText> Result;
-		for (const TCHAR* Line : Lines)
-		{
-			Result.Add(FText::FromString(Line));
-		}
-		return Result;
-	};
-
-	AddRow(TEXT("Графика"), Texts({ TEXT("Низкая"), TEXT("Средняя"), TEXT("Высокая"), TEXT("Эпическая") }),
-		FMath::Clamp(Settings->GetOverallScalabilityLevel(), 0, 3), [Settings](int32 Index)
-	{
-		Settings->SetOverallScalabilityLevel(Index);
-		Settings->ApplySettings(false);
-	});
-
-	const EWindowMode::Type Mode = Settings->GetFullscreenMode();
-	AddRow(TEXT("Экран"), Texts({ TEXT("Полный экран"), TEXT("Без рамки"), TEXT("Окно") }),
-		Mode == EWindowMode::Fullscreen ? 0 : Mode == EWindowMode::WindowedFullscreen ? 1 : 2, [Settings](int32 Index)
-	{
-		Settings->SetFullscreenMode(Index == 0 ? EWindowMode::Fullscreen : Index == 1 ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed);
-		Settings->ApplySettings(false);
-	});
-
-	TArray<FIntPoint> Resolutions;
-	UKismetSystemLibrary::GetSupportedFullscreenResolutions(Resolutions);
-	if (Resolutions.Num() == 0)
-	{
-		Resolutions = { FIntPoint(1280, 720), FIntPoint(1600, 900), FIntPoint(1920, 1080) };
-	}
-	TArray<FText> ResolutionNames;
-	int32 CurrentResolution = Resolutions.Num() - 1;
-	for (int32 I = 0; I < Resolutions.Num(); ++I)
-	{
-		ResolutionNames.Add(FText::FromString(FString::Printf(TEXT("%d × %d"), Resolutions[I].X, Resolutions[I].Y)));
-		if (Resolutions[I] == Settings->GetScreenResolution())
-		{
-			CurrentResolution = I;
-		}
-	}
-	AddRow(TEXT("Разрешение"), MoveTemp(ResolutionNames), CurrentResolution, [Settings, Resolutions](int32 Index)
-	{
-		Settings->SetScreenResolution(Resolutions[Index]);
-		Settings->ApplySettings(false);
-	});
-
-	AddRow(TEXT("Верт. синхронизация"), Texts({ TEXT("Выкл"), TEXT("Вкл") }), Settings->IsVSyncEnabled() ? 1 : 0, [Settings](int32 Index)
-	{
-		Settings->SetVSyncEnabled(Index == 1);
-		Settings->ApplySettings(false);
-	});
-
-	TArray<FText> Volumes;
-	for (int32 Percent = 0; Percent <= 100; Percent += 10)
-	{
-		Volumes.Add(FText::FromString(FString::Printf(TEXT("%d%%"), Percent)));
-	}
-	TWeakObjectPtr<UUserWidget> WeakThis(Owner);
-	AddRow(TEXT("Громкость"), MoveTemp(Volumes), FMath::RoundToInt(KeepersSettings::GetVolume() * 10.f), [WeakThis](int32 Index)
-	{
-		if (WeakThis.IsValid())
-		{
-			KeepersSettings::SetVolume(WeakThis.Get(), Index / 10.f);
-		}
-	});
+	// Settings in tabs: graphics, sound, controls, game.
+	UKeepersSettingsPanel* Panel = CreateWidget<UKeepersSettingsPanel>(Owner, UKeepersSettingsPanel::StaticClass());
+	Target->AddChildToVerticalBox(Panel)->SetPadding(FMargin(LeftPadding, 3.f, 0.f, 3.f));
 }
 
 void UKeepersMainMenuWidget::AskNewCampaign()
