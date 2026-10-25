@@ -1,0 +1,18 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Keepers Game",
+	"Description": "Gameplay code for Keepers of the Lands that Blueprints build on.",
+	"Category": "Keepers",
+	"CreatedBy": "Keepers of the Lands",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"Modules": [
+		{
+			"Name": "KeepersGame",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault"
+		}
+	]
+}
