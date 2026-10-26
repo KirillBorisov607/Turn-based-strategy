@@ -20,6 +20,7 @@
 #include "KeepersReflection.h"
 #include "KeepersSettings.h"
 #include "KeepersSurfaces.h"
+#include "KeepersTerrainSubsystem.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -303,6 +304,10 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 	else if (Step.Action == TEXT("squadhero") && Menu && Args.Num() >= 1)
 	{
 		Menu->TestSquad(FName(*Args[0]), Args.Num() > 1 ? FCString::Atoi(*Args[1]) : -1);
+	}
+	else if (Step.Action == TEXT("interact") && !Step.Argument.IsEmpty())
+	{
+		UKeepersTerrainSubsystem::TestInteraction(World, Step.Argument);
 	}
 	else if (Step.Action == TEXT("screen") && Args.Num() >= 3)
 	{

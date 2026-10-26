@@ -17,7 +17,23 @@ enum class EKeepersBarkSituation : uint8
 	Bumped,
 	Falls,
 	RaisesRock,
-	GrowsForest
+	GrowsForest,
+	// Reactions (KeepersReactions): who hits whom, who falls, what the world does.
+	FriendlyFire,
+	HitAlly,
+	Kill,
+	AllyDown,
+	LowHealth,
+	Healed,
+	BattleStart,
+	Victory,
+	TreeFalls,
+	RockRolls,
+	Rockfall,
+	IceMelts,
+	Slides,
+	StuckInMarsh,
+	Shocked
 };
 
 /** A speech bubble: rounded dark box with white text. Built in C++, no widget asset needed. */

@@ -24,6 +24,8 @@ enum class EKeepersTerrainEffect : uint8
 	Crush,
 	Throw,
 	Rage,
+	/** Any other spell's blow: the world may react (a tree by the target falls). */
+	Blow,
 	// Enemies.
 	Boulder
 };
@@ -101,6 +103,9 @@ public:
 	/** Damages a unit and lets the combat system process its death. */
 	static void DamageUnit(UObject* CombatSystem, UObject* Unit, int32 Amount);
 
+	/** Test hook: stages a world reaction next to an enemy ("tree", "rock", "rockfall", "melt") and plays it. */
+	static void TestInteraction(const UObject* WorldContext, const FString& Kind);
+
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
@@ -119,12 +124,27 @@ private:
 	/** Removes a rock or a tree raised in battle on a cell; the cell becomes plain ground. */
 	bool ClearProp(UObject* Grid, const FIntPoint& Index);
 
+	// The world reacts.
+	/** A melee blow on a unit by a tree fells the tree onto the cell behind (3 damage to whoever is there). */
+	void FellTree(UObject* Grid, const FIntPoint& Origin, const FIntPoint& Target);
+	/** A unit pushed into a raised rock knocks it rolling one cell on; it crushes a unit there (4) and breaks. */
+	bool RollRock(UObject* CombatSystem, UObject* Grid, const FIntPoint& Rock, const FVector& Direction);
+	/** A rock raised on a cliff edge above a foe topples onto it (5 damage). */
+	void TryRockfall(UObject* Grid, const FIntPoint& Rock, int32 CasterTeam);
+	/** Ice in the area melts back into water; who stands on it drops in. */
+	void MeltIce(UObject* Grid, const TArray<FIntPoint>& Area);
+	/** A prop (rock or tree) raised in battle on a cell. */
+	AActor* PropAt(UObject* Grid, const FIntPoint& Index, bool bTree) const;
+
 	FDelegateHandle SpawnHandle;
 
 	TMap<TWeakObjectPtr<AActor>, EKeepersTerrainEffect> PendingEffects;
 
 	TSet<FIntPoint> ForestTiles;
 	TSet<FIntPoint> RockTiles;
+	/** A push that carries on over ice: where it came from, how deep the chain is. */
+	FVector LastPushFrom = FVector::ZeroVector;
+	int32 SlideDepth = 0;
 	TSet<FIntPoint> IceTiles;
 
 	UPROPERTY()

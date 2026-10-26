@@ -1,10 +1,11 @@
-﻿#include "KeepersBarks.h"
+#include "KeepersBarks.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
 #include "Components/WidgetComponent.h"
 #include "Engine/World.h"
+#include "KeepersReactions.h"
 #include "KeepersReflection.h"
 #include "KeepersSettings.h"
 
@@ -169,7 +170,9 @@ void UKeepersBarkLibrary::BarkAbout(AActor* Unit, EKeepersBarkSituation Situatio
 	{
 		UnitType = ByteProperty->GetPropertyValue(TypePtr);
 	}
-	const KeepersBarks::FLines& Lines = KeepersBarks::LinesFor(UnitType, Situation);
+	// The unit's own lines, else the reactions' lines for its kind.
+	const KeepersBarks::FLines& Own = KeepersBarks::LinesFor(UnitType, Situation);
+	const KeepersBarks::FLines& Lines = Own.Num() > 0 ? Own : KeepersReactions::Lines(UnitType, Situation);
 	if (Lines.Num() > 0)
 	{
 		Bark(Unit, FText::FromString(Lines[FMath::RandRange(0, Lines.Num() - 1)]));
