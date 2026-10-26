@@ -311,6 +311,14 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 	{
 		Campaign->StartNewCampaign();
 	}
+	else if (Step.Action == TEXT("region") && Campaign && Args.Num() >= 1)
+	{
+		Campaign->TestSetRegion(FCString::Atoi(*Args[0]));
+	}
+	else if (Step.Action == TEXT("enter") && Campaign && Args.Num() >= 1)
+	{
+		Campaign->TestEnterNode(FCString::Atoi(*Args[0]));
+	}
 	else if (Step.Action == TEXT("continue") && Campaign)
 	{
 		Campaign->ContinueCampaign();

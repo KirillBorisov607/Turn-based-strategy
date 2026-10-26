@@ -76,6 +76,9 @@ public:
 	TArray<FIntPoint> GetForests() const { return ForestTiles.Array(); }
 	TArray<FIntPoint> GetIce() const { return IceTiles.Array(); }
 
+	/** A raised rock crumbles: the cell is plain ground again. */
+	bool CrumbleRock(UObject* Grid, const FIntPoint& Index) { return ClearProp(Grid, Index); }
+
 	/** Water on the tile becomes walkable ice with a plate; false if it is not water. */
 	bool FreezeWater(UObject* Grid, const FIntPoint& Index);
 

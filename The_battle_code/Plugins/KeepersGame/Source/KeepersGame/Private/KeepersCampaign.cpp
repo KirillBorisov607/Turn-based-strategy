@@ -1,5 +1,6 @@
 #include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersRegions.h"
 #include "KeepersBattleObjective.h"
 #include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
@@ -620,6 +621,45 @@ const FKeepersBattleSnapshot* UKeepersCampaignSubsystem::GetBattleToResume() con
 	return bResumeBattle && Save && Save->Battle.Node != INDEX_NONE && Save->Battle.Node == Save->CurrentNode ? &Save->Battle : nullptr;
 }
 
+const FKeepersRegion& UKeepersCampaignSubsystem::GetRegionDef() const
+{
+	return KeepersRegions::Get(GetRegion());
+}
+
+bool UKeepersCampaignSubsystem::IsFinalRegion() const
+{
+	return GetRegion() >= KeepersRegions::All().Num() - 1;
+}
+
+void UKeepersCampaignSubsystem::TestSetRegion(int32 Region)
+{
+	if (!Save)
+	{
+		return;
+	}
+	Save->Region = FMath::Clamp(Region, 0, KeepersRegions::All().Num() - 1);
+	GenerateMap(FMath::Rand());
+	Save->VisitedNodes.Reset();
+	Save->CurrentNode = INDEX_NONE;
+	bRegionIntroPending = true;
+	WriteSave();
+}
+
+void UKeepersCampaignSubsystem::TestEnterNode(int32 NodeIndex)
+{
+	if (!Save || Save->Nodes.Num() == 0)
+	{
+		return;
+	}
+	Save->CurrentNode = NodeIndex < 0 ? Save->Nodes.Num() - 1 : FMath::Min(NodeIndex, Save->Nodes.Num() - 1);
+	WriteSave();
+	if (!Save->Nodes[Save->CurrentNode].Level.IsNone())
+	{
+		PrepareGeneratedField(Save->CurrentNode);
+		OpenLevel(Save->Nodes[Save->CurrentNode].Level);
+	}
+}
+
 void UKeepersCampaignSubsystem::MarkBattleWon()
 {
 	if (Save && bActive && Save->Nodes.IsValidIndex(Save->CurrentNode))
@@ -660,6 +700,27 @@ void UKeepersCampaignSubsystem::CompleteCurrentNode()
 		const EKeepersNodeType Type = Save->Nodes[Save->CurrentNode].Type;
 		const int32 Glory = Type == EKeepersNodeType::Boss ? 40 : Type == EKeepersNodeType::Elite ? 12 : Type == EKeepersNodeType::Battle || bEventFight ? 6 : 0;
 		Party->AddGlory(HasArtifact(TEXT("GloryBanner")) ? Glory * 2 : Glory);
+	}
+	if (IsBossNode(Save->CurrentNode) && !IsFinalRegion())
+	{
+		// The next region: a new map; gold, relics, levels and the squad stay.
+		const FKeepersRegion& Cleared = GetRegionDef();
+		if (!Cleared.Unlocks.IsNone())
+		{
+			if (UKeepersPartySubsystem* Party = GetGameInstance()->GetSubsystem<UKeepersPartySubsystem>())
+			{
+				Party->UnlockHero(Cleared.Unlocks);
+			}
+		}
+		++Save->Region;
+		GenerateMap(FMath::Rand());
+		Save->VisitedNodes.Reset();
+		Save->CurrentNode = INDEX_NONE;
+		bRegionIntroPending = true;
+		UE_LOG(LogKeepersCampaign, Log, TEXT("Region %d: %s"), Save->Region, *GetRegionDef().Name.ToString());
+		WriteSave();
+		OpenLevel(MapLevel);
+		return;
 	}
 	if (IsBossNode(Save->CurrentNode))
 	{

@@ -174,6 +174,10 @@ public:
 	/** The battle in progress, saved at the start of its last round. */
 	UPROPERTY(SaveGame)
 	FKeepersBattleSnapshot Battle;
+
+	/** Region of the run (KeepersRegions), from 0. */
+	UPROPERTY(SaveGame)
+	int32 Region = 0;
 };
 
 /** What a hero learns on a level-up. */
@@ -312,6 +316,17 @@ public:
 
 	/** Set by the quick battle "Наёмники кур": the next battle gets a band of mercenaries. */
 	bool bMercenaryQuickBattle = false;
+
+	/** The region of the run and its rules. */
+	int32 GetRegion() const { return Save ? Save->Region : 0; }
+	const struct FKeepersRegion& GetRegionDef() const;
+	bool IsFinalRegion() const;
+	/** Test hook: the run jumps to a region with a new map. */
+	void TestSetRegion(int32 Region);
+	/** Test hook: enters a node whether it is open or not; -1 is the boss. */
+	void TestEnterNode(int32 NodeIndex);
+	/** The map shows the region's introduction once after a new region begins. */
+	bool bRegionIntroPending = false;
 
 	/** The battle in progress: saved every round, resumed by ContinueCampaign. */
 	void SaveBattle(const FKeepersBattleSnapshot& Snapshot);

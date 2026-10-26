@@ -8,6 +8,7 @@
 #include "KeepersJuice.h"
 #include "KeepersLevelKit.h"
 #include "KeepersReflection.h"
+#include "KeepersRegions.h"
 #include "KeepersTerrainSubsystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "TimerManager.h"
@@ -197,8 +198,15 @@ void UKeepersSurfaceSubsystem::SetUp()
 	}
 
 	// Patches for the region: on open ground, away from the heroes' first cells.
-	const EKeepersSurface Patch = Requested;
+	EKeepersSurface Patch = Requested;
 	Requested = EKeepersSurface::None;
+	if (const UKeepersCampaignSubsystem* Region = UKeepersCampaignSubsystem::Get(this))
+	{
+		if (Patch == EKeepersSurface::None && Region->IsActive() && Region->IsInBattleNode())
+		{
+			Patch = Region->GetRegionDef().Surface;
+		}
+	}
 	if (Patch != EKeepersSurface::None)
 	{
 		const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(this);

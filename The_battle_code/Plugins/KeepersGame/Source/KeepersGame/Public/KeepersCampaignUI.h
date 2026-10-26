@@ -180,7 +180,13 @@ private:
 	/** Saves the battle (once the mercenaries and the objective are in place). */
 	void SaveBattle(UObject* CombatSystem);
 	/** Puts the saved battle back: the field, the fallen, positions, health, the round. */
-	void ResumeBattle(UObject* CombatSystem);
+	bool ResumeBattle(UObject* CombatSystem);
+	/** The region's rule at the start of a battle: forest, barricades. */
+	void ApplyRegionField(UObject* CombatSystem);
+	/** Each round: the shifting land of the Heart, the forest of the forest boss. */
+	void ApplyRegionRound(UObject* CombatSystem);
+	/** Empty plain cells of the field, at least MinSteps cells from every unit. */
+	TArray<FIntPoint> FreeCells(UObject* Grid, float MinDistance) const;
 	bool bSaveDue = false;
 	bool bResumeChecked = false;
 	void OnBattleFinished(UObject* CombatSystem, int32 Winner);
@@ -191,6 +197,8 @@ private:
 
 	/** Every battle shows a goal: a campaign battle gets one picked by its node, others "defeat all". */
 	void EnsureObjective();
+	/** The boss node: the region's boss joins the enemies and must fall. */
+	void SpawnBoss(UObject* CombatSystem);
 
 	bool bObjectiveChecked = false;
 

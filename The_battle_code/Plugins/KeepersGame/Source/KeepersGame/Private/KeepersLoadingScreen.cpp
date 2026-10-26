@@ -5,8 +5,10 @@
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "KeepersCampaign.h"
 #include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
+#include "KeepersRegions.h"
 #include "KeepersStyle.h"
 #include "Styling/CoreStyle.h"
 #include "TimerManager.h"
@@ -176,6 +178,27 @@ TSharedRef<SWidget> UKeepersLoadingSubsystem::BuildWidget(FName Level)
 		GeneratedTitle = KitRow->Title.IsEmpty() ? KitLevel : KitRow->Title.ToString();
 		GeneratedSubtitle = KitRow->Subtitle.ToString();
 		Place = { *KitLevel, KitRow->Kind == EKeepersLevelKind::Elite ? TEXT("опасный бой") : TEXT("бой"), *GeneratedTitle, *GeneratedSubtitle };
+	}
+	// In the campaign the places belong to the current region.
+	static FString RegionKicker;
+	static FString RegionTitle;
+	static FString RegionSubtitle;
+	const UKeepersCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UKeepersCampaignSubsystem>();
+	if (Campaign && Campaign->IsActive())
+	{
+		const FKeepersRegion& Region = Campaign->GetRegionDef();
+		if (FCString::Strcmp(Place.Level, TEXT("L_CampaignMap")) == 0)
+		{
+			RegionKicker = Region.Numeral.ToString();
+			RegionTitle = Region.Name.ToString();
+			RegionSubtitle = Region.Intro.ToString();
+			Place = { Place.Level, *RegionKicker, *RegionTitle, *RegionSubtitle };
+		}
+		else
+		{
+			RegionKicker = FString(Place.Kicker).Replace(TEXT("Зелёные долы"), *Region.Name.ToString());
+			Place.Kicker = *RegionKicker;
+		}
 	}
 	const TCHAR* Tip = KeepersLoading::Tips[TipIndex % UE_ARRAY_COUNT(KeepersLoading::Tips)];
 

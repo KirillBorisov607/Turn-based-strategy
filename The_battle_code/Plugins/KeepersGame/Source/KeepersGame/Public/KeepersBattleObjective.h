@@ -100,6 +100,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Objective")
 	bool bTotem = false;
 
+	/** The leader is the region's boss, called so in the goal ("Король слизней"). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Objective")
+	FText BossName;
+
 	/** The objective of the level, if any (cached per frame). */
 	static AKeepersBattleObjective* Find(const UWorld* World);
 	/** The next battle level without an objective of its own gets this one. */

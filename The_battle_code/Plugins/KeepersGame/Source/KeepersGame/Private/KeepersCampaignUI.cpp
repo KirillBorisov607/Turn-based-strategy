@@ -27,8 +27,10 @@
 #include "KeepersCamp.h"
 #include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersRegions.h"
 #include "KeepersPartyBattle.h"
 #include "KeepersCreatureSubsystem.h"
+#include "KeepersLevelKit.h"
 #include "KeepersReflection.h"
 #include "KeepersStyle.h"
 #include "KeepersTerrainSubsystem.h"
@@ -431,10 +433,13 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 		TopBar->SetPadding(FMargin(60.f, 10.f));
 		TopBar->SetVerticalAlignment(VAlign_Center);
 		UHorizontalBox* TitleRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		TitleRow->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, FText::FromString(TEXT("Зелёные долы")), KeepersStyle::Heading(38), KeepersStyle::Gold))
-			->SetVerticalAlignment(VAlign_Center);
-		TitleRow->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, FText::FromString(TEXT("Выберите следующую точку пути. Открыты только соседние с пройденными.")), KeepersStyle::Body(14), KeepersStyle::TextDim))
-			->SetPadding(FMargin(24.f, 6.f, 0.f, 0.f));
+		const FKeepersRegion& Region = Campaign->GetRegionDef();
+		UVerticalBox* Titles = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		Titles->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, Region.Numeral, KeepersStyle::Heading(14), KeepersStyle::TextDim));
+		Titles->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, Region.Name, KeepersStyle::Heading(38), KeepersStyle::Gold));
+		TitleRow->AddChildToHorizontalBox(Titles)->SetVerticalAlignment(VAlign_Center);
+		TitleRow->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, FText::FromString(Region.Intro.ToString() + TEXT("\nВыберите следующую точку пути. Открыты только соседние с пройденными.")),
+			KeepersStyle::Body(14), KeepersStyle::TextDim))->SetPadding(FMargin(24.f, 6.f, 0.f, 0.f));
 		TopBar->SetContent(TitleRow);
 		if (UCanvasPanelSlot* TopSlot = Canvas->AddChildToCanvas(TopBar))
 		{
@@ -803,10 +808,7 @@ void UKeepersCampaignWorldSubsystem::TickMercenaries()
 	TArray<uint8> Band;
 	constexpr uint8 Bandit = 6;
 	constexpr uint8 Archer = 7;
-	constexpr uint8 Brute = 8;
 	constexpr uint8 Cavalry = 12;
-	constexpr uint8 Catapult = 13;
-	constexpr uint8 Ram = 14;
 	constexpr uint8 Shaman = 15;
 	if (Campaign->NextBand.Num() > 0)
 	{
@@ -822,23 +824,20 @@ void UKeepersCampaignWorldSubsystem::TickMercenaries()
 	}
 	else if (Campaign->IsInBattleNode())
 	{
-		// Riders are the elite, siege machines come with the boss, shamans join later battles.
+		// Every region has its own band; the first region eases in with the level's own enemies.
 		const FKeepersMapNode& Node = Campaign->GetNodes()[Campaign->GetCurrentNode()];
+		const FKeepersRegion& Region = Campaign->GetRegionDef();
 		if (Node.Type == EKeepersNodeType::Elite)
 		{
-			Band = { Cavalry, Bandit, Archer };
+			Band = Region.EliteBand;
 		}
 		else if (Node.Type == EKeepersNodeType::Boss)
 		{
-			Band = { Brute, Catapult, Ram, Archer };
+			Band = Region.BossBand;
 		}
-		else if (Node.Column >= 3)
+		else if (Campaign->GetRegion() > 0 || Node.Column >= 2)
 		{
-			Band = { Bandit, Shaman, Archer };
-		}
-		else if (Node.Column >= 2)
-		{
-			Band = { Bandit, Archer };
+			Band = Region.Band;
 		}
 	}
 	if (Band.Num() == 0)
@@ -911,14 +910,24 @@ void UKeepersCampaignWorldSubsystem::EnsureObjective()
 		return;
 	}
 	bObjectiveChecked = true;
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	const bool bBoss = Campaign && Campaign->IsActive() && Campaign->IsInBattleNode() && Campaign->IsBossNode(Campaign->GetCurrentNode());
 	for (TActorIterator<AKeepersBattleObjective> It(GetWorld()); It; ++It)
 	{
-		return; // the level has its own goal
+		if (!bBoss)
+		{
+			return; // the level has its own goal
+		}
+		It->Destroy(); // the region's boss is the goal
+	}
+	if (bBoss)
+	{
+		SpawnBoss(CombatSystem);
+		return;
 	}
 
 	// Campaign battles get a goal picked by their node; others defeat every enemy.
 	int32 Variant = 0;
-	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
 	if (Campaign && Campaign->IsInBattleNode() && Campaign->GetNodes()[Campaign->GetCurrentNode()].Type == EKeepersNodeType::Battle)
 	{
 		Variant = Campaign->GetCurrentNode() % 3;
@@ -952,6 +961,180 @@ void UKeepersCampaignWorldSubsystem::EnsureObjective()
 		}
 	}
 	Objective->FinishSpawning(FTransform::Identity);
+}
+
+void UKeepersCampaignWorldSubsystem::SpawnBoss(UObject* CombatSystem)
+{
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	const FKeepersRegion& Region = Campaign->GetRegionDef();
+	AKeepersBattleObjective* Objective = GetWorld()->SpawnActorDeferred<AKeepersBattleObjective>(AKeepersBattleObjective::StaticClass(), FTransform::Identity);
+	if (!Objective)
+	{
+		return;
+	}
+	Objective->bDefeatLeader = true;
+	Objective->BossName = Region.BossName;
+	Objective->bTotem = Region.bBossTotem;
+	if (!Region.bBossTotem)
+	{
+		// The boss steps out next to the enemy furthest from the heroes: bigger and tougher than its kind.
+		TArray<UObject*> Heroes = KeepersUI::Heroes(CombatSystem);
+		UKeepersCreatureSubsystem* Creatures = GetWorld()->GetSubsystem<UKeepersCreatureSubsystem>();
+		UObject* Far = nullptr;
+		float FarDistance = -1.f;
+		for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+		{
+			int32 Team = 0;
+			if (It->GetClass()->GetName() != TEXT("BP_Unit_C") || !KeepersReflection::GetInt(It->GetClass(), *It, TEXT("TeamIndex"), Team) || Team == 0)
+			{
+				continue;
+			}
+			float Nearest = MAX_flt;
+			for (UObject* Hero : Heroes)
+			{
+				if (const AActor* HeroActor = Cast<AActor>(Hero))
+				{
+					Nearest = FMath::Min(Nearest, FVector::Dist2D(HeroActor->GetActorLocation(), It->GetActorLocation()));
+				}
+			}
+			if (Nearest > FarDistance)
+			{
+				FarDistance = Nearest;
+				Far = *It;
+			}
+		}
+		const AActor* HeroActor = Heroes.Num() > 0 ? Cast<AActor>(Heroes[0]) : nullptr;
+		if (Far && HeroActor && Creatures)
+		{
+			FIntPoint Index;
+			int32 Team = 1;
+			KeepersReflection::GetIntPoint(Far->GetClass(), Far, TEXT("Index"), Index);
+			KeepersReflection::GetInt(Far->GetClass(), Far, TEXT("TeamIndex"), Team);
+			if (AActor* Boss = Creatures->SpawnUnitNear(CombatSystem, HeroActor->GetClass(), Region.BossType, Index, Team, 0, HeroActor->GetActorScale3D().X * Region.BossScale, TEXT("Boss")))
+			{
+				KeepersReflection::AddUnitStat(Boss, TEXT("HP_Max"), Region.BossHp);
+				KeepersReflection::AddUnitStat(Boss, TEXT("HP_Current"), Region.BossHp);
+				Objective->Leader = Boss;
+				UKeepersBarkLibrary::Bark(Boss, FText::FromString(FString::Printf(TEXT("%s не отдаст камень!"), *Region.BossName.ToString())));
+			}
+		}
+	}
+	Objective->FinishSpawning(FTransform::Identity);
+	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Boss of region %d: %s"), Campaign->GetRegion(), *Region.BossName.ToString());
+}
+
+TArray<FIntPoint> UKeepersCampaignWorldSubsystem::FreeCells(UObject* Grid, float MinDistance) const
+{
+	TArray<FIntPoint> Cells;
+	FKeepersLevelGrid Level;
+	if (!Grid || !KeepersLevelKit::PrepareGrid(GetWorld(), Level))
+	{
+		return Cells;
+	}
+	TArray<FVector> Units;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (It->GetClass()->GetName() == TEXT("BP_Unit_C"))
+		{
+			Units.Add(It->GetActorLocation());
+		}
+	}
+	for (const FIntPoint& Index : KeepersLevelKit::AllIndexes(Level))
+	{
+		uint8 Type = 0;
+		FVector Location;
+		if (UKeepersTerrainSubsystem::TileType(Grid, Index, Type) && Type == 1 && !UKeepersTerrainSubsystem::UnitOnTile(Grid, Index)
+			&& UKeepersTerrainSubsystem::TileLocation(Grid, Index, Location)
+			&& !Units.ContainsByPredicate([&](const FVector& Unit) { return FVector::Dist2D(Unit, Location) < MinDistance; }))
+		{
+			Cells.Add(Index);
+		}
+	}
+	return Cells;
+}
+
+void UKeepersCampaignWorldSubsystem::ApplyRegionField(UObject* CombatSystem)
+{
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	UKeepersTerrainSubsystem* Terrain = GetWorld()->GetSubsystem<UKeepersTerrainSubsystem>();
+	UObject* Grid = KeepersReflection::GetObject(CombatSystem, TEXT("Grid"));
+	if (!Campaign || !IsNodeLevel() || !Terrain || !Grid)
+	{
+		return;
+	}
+	const FKeepersRegion& Region = Campaign->GetRegionDef();
+	FRandomStream Random(Campaign->GetSeed() + Campaign->GetCurrentNode() * 131);
+	TArray<FIntPoint> Cells = FreeCells(Grid, 150.f);
+	auto Take = [&]() { return Cells.Num() > 0 ? Cells[Random.RandRange(0, Cells.Num() - 1)] : FIntPoint(-1, -1); };
+	for (int32 I = 0; I < Region.Forests && Cells.Num() > 0; ++I)
+	{
+		const FIntPoint Cell = Take();
+		Cells.Remove(Cell);
+		Terrain->GrowForest(Grid, Cell);
+	}
+	// Barricades keep a cell away from everyone, so nobody is walled in from the start.
+	TArray<FIntPoint> Open = FreeCells(Grid, 330.f);
+	for (int32 I = 0; I < Region.Barricades && Open.Num() > 0; ++I)
+	{
+		const FIntPoint Cell = Open[Random.RandRange(0, Open.Num() - 1)];
+		Open.Remove(Cell);
+		Terrain->RaiseRock(Grid, Cell, 1);
+	}
+	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Region field: %d forest, %d barricades"), Region.Forests, Region.Barricades);
+}
+
+void UKeepersCampaignWorldSubsystem::ApplyRegionRound(UObject* CombatSystem)
+{
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	UKeepersTerrainSubsystem* Terrain = GetWorld()->GetSubsystem<UKeepersTerrainSubsystem>();
+	UObject* Grid = KeepersReflection::GetObject(CombatSystem, TEXT("Grid"));
+	if (!Campaign || !IsNodeLevel() || !Terrain || !Grid || Round < 2)
+	{
+		return;
+	}
+	const FKeepersRegion& Region = Campaign->GetRegionDef();
+	// The Heart: without the stones the land will not keep still.
+	if (Region.bShifting && Round % 2 == 0)
+	{
+		TArray<FIntPoint> Cells = FreeCells(Grid, 150.f);
+		if (Cells.Num() >= 2)
+		{
+			const FIntPoint Rock = Cells[FMath::RandRange(0, Cells.Num() - 1)];
+			Cells.Remove(Rock);
+			Terrain->RaiseRock(Grid, Rock, 1);
+			Terrain->GrowForest(Grid, Cells[FMath::RandRange(0, Cells.Num() - 1)]);
+		}
+		const TArray<FIntPoint> Rocks = Terrain->GetRocks();
+		if (Rocks.Num() > 2)
+		{
+			Terrain->CrumbleRock(Grid, Rocks[FMath::RandRange(0, Rocks.Num() - 1)]);
+		}
+		UE_LOG(LogKeepersCampaignUI, Log, TEXT("The land shifts"));
+	}
+	// The forest boss: trees close in on a hero.
+	if (Region.bBossGrowsForest && Campaign->IsBossNode(Campaign->GetCurrentNode()))
+	{
+		TArray<UObject*> Heroes = KeepersUI::Heroes(CombatSystem);
+		if (Heroes.Num() > 0)
+		{
+			UObject* Hero = Heroes[FMath::RandRange(0, Heroes.Num() - 1)];
+			FIntPoint Index;
+			KeepersReflection::GetIntPoint(Hero->GetClass(), Hero, TEXT("Index"), Index);
+			FVector Center;
+			if (UKeepersTerrainSubsystem::TileLocation(Grid, Index, Center))
+			{
+				for (const FIntPoint& Cell : FreeCells(Grid, 1.f))
+				{
+					FVector Location;
+					if (UKeepersTerrainSubsystem::TileLocation(Grid, Cell, Location) && FVector::Dist2D(Location, Center) < 320.f)
+					{
+						Terrain->GrowForest(Grid, Cell);
+						break;
+					}
+				}
+			}
+		}
+	}
 }
 
 void UKeepersCampaignWorldSubsystem::ShowMap()
@@ -1030,11 +1213,15 @@ void UKeepersCampaignWorldSubsystem::TickBattle()
 			if (!bResumeChecked)
 			{
 				bResumeChecked = true;
-				ResumeBattle(CombatSystem);
+				if (!ResumeBattle(CombatSystem))
+				{
+					ApplyRegionField(CombatSystem);
+				}
 			}
 			if (bSaveDue)
 			{
 				bSaveDue = false;
+				ApplyRegionRound(CombatSystem);
 				SaveBattle(CombatSystem);
 			}
 		}
@@ -1287,9 +1474,13 @@ void UKeepersCampaignWorldSubsystem::SaveBattle(UObject* CombatSystem)
 	Snapshot.Round = Round;
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
+		if (It->GetClass()->GetName() != TEXT("BP_Unit_C"))
+		{
+			continue;
+		}
 		bool bAlive = false;
 		KeepersReflection::FCall IsAlive(*It, TEXT("IsAlive"));
-		if (It->GetClass()->GetName() != TEXT("BP_Unit_C") || !IsAlive.Call() || !IsAlive.Get<bool>(TEXT("IsAlive"), bAlive) || !bAlive)
+		if (!IsAlive.Call() || !IsAlive.Get<bool>(TEXT("IsAlive"), bAlive) || !bAlive)
 		{
 			continue;
 		}
@@ -1308,13 +1499,13 @@ void UKeepersCampaignWorldSubsystem::SaveBattle(UObject* CombatSystem)
 	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Battle saved: round %d, %d units, %d rocks, %d forest"), Round, Snapshot.Units.Num(), Snapshot.Rocks.Num(), Snapshot.Forests.Num());
 }
 
-void UKeepersCampaignWorldSubsystem::ResumeBattle(UObject* CombatSystem)
+bool UKeepersCampaignWorldSubsystem::ResumeBattle(UObject* CombatSystem)
 {
 	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
 	const FKeepersBattleSnapshot* Saved = Campaign ? Campaign->GetBattleToResume() : nullptr;
 	if (!Saved || !IsNodeLevel())
 	{
-		return;
+		return false;
 	}
 	const FKeepersBattleSnapshot Snapshot = *Saved;
 	Campaign->bResumeBattle = false;
@@ -1322,7 +1513,7 @@ void UKeepersCampaignWorldSubsystem::ResumeBattle(UObject* CombatSystem)
 	UKeepersTerrainSubsystem* Terrain = GetWorld()->GetSubsystem<UKeepersTerrainSubsystem>();
 	if (!Grid || !Terrain)
 	{
-		return;
+		return false;
 	}
 	// The field first: rocks, forest and ice where they were.
 	for (const FIntPoint& Index : Snapshot.Ice)
@@ -1401,6 +1592,7 @@ void UKeepersCampaignWorldSubsystem::ResumeBattle(UObject* CombatSystem)
 	}
 	bSaveDue = false;
 	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Battle resumed at round %d: %d units"), Snapshot.Round, Snapshot.Units.Num());
+	return true;
 }
 
 void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int32 Winner)
@@ -1446,13 +1638,17 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 
 	if (Campaign->IsBossNode(Campaign->GetCurrentNode()))
 	{
+		const FKeepersRegion& Region = Campaign->GetRegionDef();
+		const bool bFinal = Campaign->IsFinalRegion();
 		UKeepersChoiceWidget::FOption Done;
-		Done.Title = FText::FromString(TEXT("В главное меню"));
+		Done.Title = FText::FromString(bFinal ? FString(TEXT("В главное меню"))
+			: FString::Printf(TEXT("В путь: %s"), *KeepersRegions::Get(Campaign->GetRegion() + 1).Name.ToString()));
+		Done.Description = bFinal ? FText::GetEmpty() : KeepersRegions::Get(Campaign->GetRegion() + 1).Intro;
 		Done.Color = FLinearColor(0.3f, 0.25f, 0.1f);
+		Done.Image = KeepersCards::Card(TEXT("Leave"));
 		Done.OnPicked = [WeakCampaign]() { if (WeakCampaign.IsValid()) { WeakCampaign->CompleteCurrentNode(); } };
 		Options.Add(MoveTemp(Done));
-		ShowChoice(FText::FromString(TEXT("Земли освобождены!")),
-			FText::FromString(TEXT("Зелёные долы снова зеленеют. Даже куры притихли — ненадолго.")), MoveTemp(Options));
+		ShowChoice(FText::FromString(FString::Printf(TEXT("%s освобождён!"), *Region.Name.ToString())), Region.Liberated, MoveTemp(Options));
 		return;
 	}
 

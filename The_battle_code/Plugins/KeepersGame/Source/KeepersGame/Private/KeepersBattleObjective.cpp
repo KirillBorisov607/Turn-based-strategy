@@ -451,7 +451,7 @@ void AKeepersBattleObjective::MakeTotem()
 	TotemLight->SetIntensity(6000.f);
 	TotemLight->SetAttenuationRadius(500.f);
 	TotemLight->SetCastShadows(false);
-	LeaderName = TEXT("тотем кур");
+	LeaderName = BossName.IsEmpty() ? FString(TEXT("тотем кур")) : BossName.ToString();
 	UE_LOG(LogKeepersObjective, Log, TEXT("Totem %s at %s"), *Leader->GetName(), *Base.ToString());
 }
 
@@ -677,7 +677,12 @@ void AKeepersBattleObjective::UpdateWidget()
 	{
 		Goals.Add(TEXT("дойдите до маяка"));
 	}
-	if (bDefeatLeader && bTotem)
+	if (bDefeatLeader && !BossName.IsEmpty())
+	{
+		Goals.Add(bTotem ? FString::Printf(TEXT("свалите босса — %s, он лечит врагов рядом"), *BossName.ToString())
+			: FString::Printf(TEXT("победите босса — %s"), *BossName.ToString()));
+	}
+	else if (bDefeatLeader && bTotem)
 	{
 		Goals.Add(TEXT("разрушьте тотем кур — он лечит врагов рядом"));
 	}
