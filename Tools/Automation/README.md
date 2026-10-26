@@ -30,6 +30,10 @@
 | `make_trailer.py [out.mp4]` | Склейка трейлера из записанных клипов: титры, подписи, переходы (OpenCV + PIL) |
 | `make_trailer2.py`, `trailer_shots.py` | Динамичный трейлер: короткие планы из `trailer_shots.py`, подписи, наезды, вспышки |
 | `make_music.py out.wav 48`, `mux_audio.ps1 -Video -Audio -Out` | Своя музыкальная тема и её наложение на видео (MediaComposition Windows, H.264 + AAC) |
+| `record_shorts.sh` | Материал для вертикальных роликов: способности шести героев и бои на восьми картах |
+| `shorts_data.py`, `dt_export.py`, `export_all_icons.py`, `export_unit_icons.py` | Данные игры и иконки для инфографики |
+| `make_shorts.py [N-M]`, `shorts_catalog.py` | 77 вертикальных роликов 1080×1920 с инфографикой и музыкой → `C:\ProjectsUE\_shorts`; `SKIP_EXISTING=1` и диапазоны — для параллельного рендера |
+| `shorts_plan.py [дата]` | Контент-план на месяц, раскладка файлов по папкам дней (`КОНТЕНТ_ПЛАН.md`, `plan.csv`) |
 | `make_sfx.py`, `import_sfx.py` | Синтез звуков боя и импорт в `/Game/Keepers/Audio/SFX` |
 | `make_card_icons.py`, `import_card_icons.py` | Медальоны карточек выбора → `/Game/Keepers/Icons` |
 | `to_h264.ps1 -In a.mp4 -Out b.mp4 [-Kbps 3000]` | Перекодирование в H.264 встроенным кодировщиком Windows (OpenCV пишет только MPEG-4 part 2) |

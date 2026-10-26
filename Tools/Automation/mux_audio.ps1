@@ -1,6 +1,6 @@
 # Usage: powershell -File mux_audio.ps1 -Video <in.mp4> -Audio <music.wav> -Out <out.mp4> [-Kbps 3500]
 # Puts a music track under a video with Windows' own MediaComposition and renders H.264 + AAC MP4.
-param([string]$Video, [string]$Audio, [string]$Out, [int]$Kbps = 3500)
+param([string]$Video, [string]$Audio, [string]$Out, [int]$Kbps = 3500, [int]$Width = 0, [int]$Height = 0)
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $methods = [System.WindowsRuntimeSystemExtensions].GetMethods()
 $asTask = ($methods | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
@@ -23,6 +23,7 @@ $track = Await ([Windows.Media.Editing.BackgroundAudioTrack]::CreateFromFileAsyn
 
 $profile = [Windows.Media.MediaProperties.MediaEncodingProfile]::CreateMp4([Windows.Media.MediaProperties.VideoEncodingQuality]::HD720p)
 $profile.Video.Bitrate = [uint32]($Kbps * 1000)
+if ($Width -gt 0) { $profile.Video.Width = [uint32]$Width; $profile.Video.Height = [uint32]$Height }
 $op = $composition.RenderToFileAsync($dst, [Windows.Media.Editing.MediaTrimmingPreference]::Precise, $profile)
 $task = $asTaskProgress.MakeGenericMethod([Windows.Media.Transcoding.TranscodeFailureReason], [double]).Invoke($null, @($op))
 $task.Wait(-1) | Out-Null

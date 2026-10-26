@@ -59,16 +59,24 @@ def place(track, sound, at, gain=1.0):
         track[s:e] += sound[:e - s] * gain
 
 
+TRANSPOSE = [0]
+
+
 def note(name):
     names = {"C": -9, "C#": -8, "D": -7, "D#": -6, "E": -5, "F": -4, "F#": -3, "G": -2, "G#": -1, "A": 0, "A#": 1, "B": 2}
     pitch, octave = name[:-1], int(name[-1])
-    return 440.0 * 2 ** ((names[pitch] + (octave - 4) * 12) / 12)
+    return 440.0 * 2 ** ((names[pitch] + (octave - 4) * 12 + TRANSPOSE[0]) / 12)
 
 
-def main(out, seconds, loop=False):
-    """loop: whole bars, no intro and no fades, so the end joins the start (battle music)."""
+def main(out, seconds, loop=False, bpm=None, transpose=0, seed=3, melody_shift=0):
+    """loop: whole bars, no intro and no fades, so the end joins the start (battle music).
+    bpm, transpose (semitones), seed and melody_shift make variations of the theme (for the shorts)."""
+    global BEAT, rng
+    BEAT = 60 / (bpm or BPM)
+    rng = np.random.default_rng(seed)
     if loop:
         seconds = round(seconds / (4 * BEAT)) * 4 * BEAT
+    TRANSPOSE[0] = transpose
     n = int(seconds * RATE)
     tail = int(0.8 * RATE)
     drums, bass, lute, lead = (np.zeros(n + tail) for _ in range(4))
@@ -101,7 +109,7 @@ def main(out, seconds, loop=False):
         # Melody from the third bar: two notes per beat pair.
         if b >= 2 or loop:
             for k in range(4):
-                f = note(melody[((b - 2) * 4 + k) % len(melody)])
+                f = note(melody[((b - 2) * 4 + k + melody_shift) % len(melody)])
                 s = pluck(f, BEAT * 1.2) * 0.6 + sine(f, BEAT * 1.2, 0.5) * 0.4
                 place(lead, s, t0 + k * BEAT, 0.5)
     mix_l = drums * 0.9 + bass + lute * 0.8 + lead * 0.9

@@ -3,6 +3,7 @@
 Usage: python make_trailer2.py <out.mp4>    (then to_h264.ps1 for phones)
 Shots are frame ranges of clips recorded by KeepersDirector (record.sh) in C:/ProjectsUE/_logs/rec/<clip>.
 """
+import json
 import os
 import sys
 
@@ -85,18 +86,93 @@ def card(lines, background=None, seconds=2.0, zoom=0.04):
     return [push_in(im, i / n, zoom) for i in range(n)]
 
 
-# (clip, first, last, step, push-in, kicker, caption, flash)
+# (clip, first, last, step, push-in, kicker, caption, flash[, info])
 SHOTS = []
+DATA = json.load(open(r"C:/ProjectsUE/_logs/game_data.json", encoding="utf-8"))
+ICONS = r"C:/ProjectsUE/_logs/icons"
+CARDS = r"C:/ProjectsUE/_logs/card_icons"
+
+
+def _icon(name, size):
+    for path in (os.path.join(ICONS, name + ".png"), os.path.join(CARDS, "T_Card_" + name + ".png")):
+        if os.path.exists(path):
+            return Image.open(path).convert("RGBA").resize((size, size), Image.LANCZOS)
+    return None
+
+
+def info(frame, kind, i, n):
+    """Infographic over a shot: a hero card with stat bars, an objective badge."""
+    if not kind:
+        return frame
+    p = min(1.0, i / 10)
+    base = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert("RGBA")
+    over = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(over)
+    what, _, arg = kind.partition(":")
+    if what == "hero":
+        h = next(x for x in DATA["heroes"] if x["id"] == arg)
+        x0 = int(W - 380 + (1 - p) * 200)
+        d.rounded_rectangle((x0, 470, x0 + 350, 690), 18, fill=(12, 14, 20, 215), outline=GOLD + (255,), width=2)
+        d.text((x0 + 20, 482), h["name"], font=font(30, True), fill=GOLD)
+        d.text((x0 + 20, 520), h["class"], font=font(18), fill=CREAM)
+        for k, (label, v, m, col) in enumerate((("Здоровье", h["hp"], 50, (214, 86, 70)), ("Движение", h["mp"], 6, (96, 160, 230)),
+                                                 ("Действия", h["ap"], 4, GOLD))):
+            y = 560 + k * 40
+            d.text((x0 + 20, y), label, font=font(17), fill=CREAM)
+            d.rounded_rectangle((x0 + 130, y + 4, x0 + 290, y + 20), 8, fill=(255, 255, 255, 40))
+            fill = int(160 * min(v / m, 1) * min(1.0, i / 25))
+            if fill > 6:
+                d.rounded_rectangle((x0 + 130, y + 4, x0 + 130 + fill, y + 20), 8, fill=col + (255,))
+            d.text((x0 + 300, y - 2), str(v), font=font(20, True), fill=CREAM)
+    elif what == "goal":
+        icon_name, _, text = arg.partition("|")
+        ic = _icon(icon_name, 64)
+        x0 = int(W - 470 + (1 - p) * 300)
+        d.rounded_rectangle((x0, 600, x0 + 440, 690), 18, fill=(12, 14, 20, 215), outline=GOLD + (255,), width=2)
+        if ic:
+            over.alpha_composite(ic, (x0 + 14, 613))
+        d.text((x0 + 92, 610), "ЗАДАНИЕ", font=font(16, True), fill=GOLD)
+        d.text((x0 + 92, 634), text, font=font(26, True), fill=CREAM)
+    return cv2.cvtColor(np.array(Image.alpha_composite(base, over).convert("RGB")), cv2.COLOR_RGB2BGR)
+
+
+def numbers_card(background, seconds=3.4):
+    """Six numbers counting up over a blurred frame."""
+    base = Image.fromarray(cv2.cvtColor(background, cv2.COLOR_BGR2RGB)).filter(ImageFilter.GaussianBlur(12))
+    base = Image.blend(base, Image.new("RGB", (W, H), (14, 16, 22)), 0.55)
+    items = [(6, "героев"), (24, "способности"), (20, "событий"), (16, "реликвий"), (5, "заданий боя"), (9, "видов врагов")]
+    frames = []
+    n = int(seconds * FPS)
+    for i in range(n):
+        im = base.copy()
+        d = ImageDraw.Draw(im)
+        for k, (v, label) in enumerate(items):
+            x = 150 + (k % 3) * 360
+            y = 150 + (k // 3) * 250
+            q = max(0.0, min(1.0, (i - k * 4) / 18))
+            if q <= 0:
+                continue
+            value = str(int(round(v * (1 - (1 - q) ** 3))))
+            d.text((x, y), value, font=font(120, True), fill=GOLD)
+            d.text((x + 4, y + 140), label, font=font(30), fill=CREAM)
+        frames.append(cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR))
+    return frames
 
 
 def build(shots_spec):
     shots = []
-    for clip, first, last, step, zoom, kicker, text, flash in shots_spec:
+    for spec in shots_spec:
+        clip, first, last, step, zoom, kicker, text, flash = spec[:8]
+        kind = spec[8] if len(spec) > 8 else ""
+        if clip == "NUMBERS":
+            shots.append(numbers_card(load("battle2", 200)))
+            continue
         frames = [f for f in (load(clip, i) for i in range(first, last, step)) if f is not None]
         n = len(frames)
         out = []
         for i, im in enumerate(frames):
             im = push_in(im, i / max(n - 1, 1), zoom)
+            im = info(im, kind, i, n)
             im = caption(im, kicker, text, i, n)
             if flash and i < 3:
                 im = cv2.addWeighted(im, 0.4 + 0.2 * i, np.full_like(im, 255), 0.6 - 0.2 * i, 0)
@@ -125,12 +201,12 @@ def write(shots, out):
 
 
 def main(out):
-    spec = eval(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "trailer_shots.py"), encoding="utf-8").read())
+    spec = eval(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.environ.get("SHOTS", "trailer_shots.py")), encoding="utf-8").read())
     first = load(spec[0][0], spec[0][1])
     shots = [card([("Хранители земель", font(84, True), GOLD), ("пошаговая тактика на гексах", font(32), CREAM)], first, 2.2)]
     shots += build(spec)
-    shots.append(card([("Альфа-тест", font(70, True), GOLD), ("дипломный проект · Unreal Engine 5.8", font(30), CREAM),
-                       ("октябрь 2026", font(26), CREAM)], None, 3.0))
+    shots.append(card([("Хранители земель", font(70, True), GOLD), ("пошаговая тактика · смешное фэнтези", font(30), CREAM),
+                       ("альфа-тест — скоро", font(30, True), CREAM)], None, 3.0))
     write(shots, out)
     print("written", out, sum(len(s) for s in shots) / FPS, "s")
 
