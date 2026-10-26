@@ -20,4 +20,14 @@ public:
 
 	/** Makes a battle unit another type: E_UnitType and the default unit data of that type. */
 	static bool ChangeUnitType(UObject* Unit, uint8 UnitType);
+
+	/** A recruit's funny name, empty for everyone else. */
+	static FText NicknameOf(const UObject* Unit);
+	static bool IsRecruit(const UObject* Unit) { return !NicknameOf(Unit).IsEmpty(); }
+
+	/** Heroes who sit this battle out with wounds. */
+	TArray<FName> SatOut;
+
+private:
+	TMap<TWeakObjectPtr<const UObject>, FText> Nicknames;
 };

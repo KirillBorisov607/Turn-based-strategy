@@ -429,6 +429,77 @@ TArray<FName> UKeepersCampaignSubsystem::GetSpellsToLearn(FName Hero) const
 	return Spells;
 }
 
+void UKeepersCampaignSubsystem::ResolveWounds(const TArray<FName>& SatOut, const TArray<FName>& Fallen)
+{
+	if (!Save)
+	{
+		return;
+	}
+	for (const FName& Hero : SatOut)
+	{
+		Save->Wounded.Remove(Hero);
+		const int32 Recruit = Save->RecruitFor.IndexOfByKey(Hero);
+		if (Recruit != INDEX_NONE)
+		{
+			Save->RecruitFor.RemoveAt(Recruit);
+			Save->RecruitBase.RemoveAt(Recruit);
+			Save->RecruitNames.RemoveAt(Recruit);
+		}
+	}
+	for (const FName& Hero : Fallen)
+	{
+		Save->Wounded.AddUnique(Hero);
+	}
+	WriteSave();
+	UE_LOG(LogKeepersCampaign, Log, TEXT("Wounds: %d heroes back, %d wounded"), SatOut.Num(), Fallen.Num());
+}
+
+bool UKeepersCampaignSubsystem::HealWound(FName Hero)
+{
+	if (!IsWounded(Hero) || !SpendGold(HealerCost()))
+	{
+		return false;
+	}
+	Save->Wounded.Remove(Hero);
+	ResolveWounds({ Hero }, {});
+	return true;
+}
+
+FString UKeepersCampaignSubsystem::HireRecruit(FName WoundedHero)
+{
+	FName Base;
+	FString Name;
+	if (!IsWounded(WoundedHero) || GetRecruit(WoundedHero, Base, Name) || !SpendGold(RecruitCost()))
+	{
+		return Name;
+	}
+	static const TCHAR* First[] = { TEXT("Гриша"), TEXT("Федот"), TEXT("Тимоха"), TEXT("Савва"), TEXT("Ерёма"), TEXT("Прохор"),
+		TEXT("Кузьма"), TEXT("Фрося"), TEXT("Глаша"), TEXT("Дуня"), TEXT("Марфа"), TEXT("Луша") };
+	static const TCHAR* Nick[] = { TEXT("Два Щита"), TEXT("Без Сапога"), TEXT("Курощуп"), TEXT("Громкий Чих"), TEXT("Кривой Лук"),
+		TEXT("Последний Шанс"), TEXT("Ленивый Молот"), TEXT("Сырная Борода"), TEXT("Тихий Топот"), TEXT("Гроза Огородов") };
+	static const TCHAR* Bases[] = { TEXT("Warrior"), TEXT("Ranger"), TEXT("Priest") };
+	Name = FString::Printf(TEXT("%s %s"), First[FMath::RandRange(0, UE_ARRAY_COUNT(First) - 1)], Nick[FMath::RandRange(0, UE_ARRAY_COUNT(Nick) - 1)]);
+	Base = Bases[FMath::RandRange(0, UE_ARRAY_COUNT(Bases) - 1)];
+	Save->RecruitFor.Add(WoundedHero);
+	Save->RecruitBase.Add(Base);
+	Save->RecruitNames.Add(Name);
+	WriteSave();
+	UE_LOG(LogKeepersCampaign, Log, TEXT("Recruit %s (%s) stands in for %s"), *Name, *Base.ToString(), *WoundedHero.ToString());
+	return Name;
+}
+
+bool UKeepersCampaignSubsystem::GetRecruit(FName WoundedHero, FName& OutBase, FString& OutName) const
+{
+	const int32 Index = Save ? Save->RecruitFor.IndexOfByKey(WoundedHero) : INDEX_NONE;
+	if (Index == INDEX_NONE || !Save->RecruitBase.IsValidIndex(Index) || !Save->RecruitNames.IsValidIndex(Index))
+	{
+		return false;
+	}
+	OutBase = Save->RecruitBase[Index];
+	OutName = Save->RecruitNames[Index];
+	return true;
+}
+
 void UKeepersCampaignSubsystem::LearnSpell(FName Hero, FName Spell)
 {
 	if (!Save || GetHeroLevel(Hero) >= MaxHeroLevel || GetLearnedSpells(Hero).Contains(Spell))

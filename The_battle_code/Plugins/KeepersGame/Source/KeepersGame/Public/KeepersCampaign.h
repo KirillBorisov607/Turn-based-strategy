@@ -108,6 +108,20 @@ public:
 	/** Abilities learned on level-ups, as "Hero:Spell". */
 	UPROPERTY(SaveGame)
 	TArray<FName> LearnedSpells;
+
+	/** Heroes who fell in the last won battle: they sit the next battle out. */
+	UPROPERTY(SaveGame)
+	TArray<FName> Wounded;
+
+	/** Recruits hired at a camp: the wounded hero they stand in for, their unit type and name. */
+	UPROPERTY(SaveGame)
+	TArray<FName> RecruitFor;
+
+	UPROPERTY(SaveGame)
+	TArray<FName> RecruitBase;
+
+	UPROPERTY(SaveGame)
+	TArray<FString> RecruitNames;
 };
 
 /** What a hero learns on a level-up. */
@@ -220,6 +234,20 @@ public:
 	TArray<FName> GetLearnedSpells(FName Hero) const;
 	/** A level-up that teaches an ability. */
 	void LearnSpell(FName Hero, FName Spell);
+
+	/** Wounded heroes sit the next battle out, unless a healer at a camp helps. */
+	bool IsWounded(FName Hero) const { return Save && Save->Wounded.Contains(Hero); }
+	const TArray<FName>& GetWounded() const { return Save->Wounded; }
+	/** After a won battle: those who sat out are well again, the fallen are wounded. */
+	void ResolveWounds(const TArray<FName>& SatOut, const TArray<FName>& Fallen);
+	static int32 HealerCost() { return 30; }
+	static int32 RecruitCost() { return 15; }
+	/** The camp's healer: the hero is well at once. */
+	bool HealWound(FName Hero);
+	/** A recruit stands in for a wounded hero in the next battle; returns the recruit's name. */
+	FString HireRecruit(FName WoundedHero);
+	/** The recruit standing in for a hero: false when there is none. */
+	bool GetRecruit(FName WoundedHero, FName& OutBase, FString& OutName) const;
 
 	/** Gives the next rank for free (events); false when maxed. */
 	bool GrantGear(FName Hero, EKeepersGear Gear);

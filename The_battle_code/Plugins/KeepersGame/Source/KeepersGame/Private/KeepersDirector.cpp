@@ -274,6 +274,10 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 	{
 		Campaign->StartNewCampaign();
 	}
+	else if (Step.Action == TEXT("wound") && Campaign && Args.Num() >= 1)
+	{
+		Campaign->ResolveWounds({}, { FName(*Args[0]) });
+	}
 	else if (Step.Action == TEXT("learn") && Campaign && Args.Num() >= 2)
 	{
 		Campaign->LearnSpell(FName(*Args[0]), FName(*Args[1]));

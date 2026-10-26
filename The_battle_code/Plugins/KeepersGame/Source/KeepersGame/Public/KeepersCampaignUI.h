@@ -194,6 +194,9 @@ private:
 
 	bool bMapShown = false;
 	bool bArtifactsApplied = false;
+
+	/** Heroes on the field when the battle began (recruits not counted). */
+	TMap<TWeakObjectPtr<UObject>, FName> BattleHeroes;
 	bool bBattleResolved = false;
 	int32 Round = 0;
 	int32 LastTeam = INDEX_NONE;

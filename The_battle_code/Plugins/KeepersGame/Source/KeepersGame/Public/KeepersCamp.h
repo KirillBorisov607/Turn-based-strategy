@@ -23,6 +23,8 @@ public:
 	/** Test hooks: buy the next armour rank of a squad member, buy a merchant offer. */
 	void TestUpgrade(int32 SquadIndex, bool bBoots);
 	void TestBuy(int32 Offer);
+	/** Test hook: heal (or hire a recruit for) the wounded hero Index. */
+	void TestInfirmary(int32 Index, bool bRecruit);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -31,6 +33,8 @@ private:
 	void Refresh();
 	void Upgrade(FName Hero, bool bBoots);
 	void Buy(int32 Offer);
+	void Heal(FName Hero);
+	void Hire(FName Hero);
 
 	/** Artifacts on sale, rolled when the camp opens. */
 	TArray<FName> Offers;
@@ -41,6 +45,13 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UHorizontalBox> Merchant;
+
+	/** Wounded heroes: a healer or a recruit. */
+	UPROPERTY()
+	TObjectPtr<UHorizontalBox> Infirmary;
+
+	UPROPERTY()
+	TObjectPtr<class UBorder> InfirmaryTitle;
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> GoldText;

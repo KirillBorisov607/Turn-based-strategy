@@ -35,6 +35,14 @@ bool UKeepersPartyBattleSubsystem::ChangeUnitType(UObject* Unit, uint8 UnitType)
 	return Data && Apply.SetRaw(TEXT("Data"), Data) && Apply.Call();
 }
 
+FText UKeepersPartyBattleSubsystem::NicknameOf(const UObject* Unit)
+{
+	const UWorld* World = Unit ? Unit->GetWorld() : nullptr;
+	const UKeepersPartyBattleSubsystem* Self = World ? World->GetSubsystem<UKeepersPartyBattleSubsystem>() : nullptr;
+	const FText* Name = Self ? Self->Nicknames.Find(Unit) : nullptr;
+	return Name ? *Name : FText::GetEmpty();
+}
+
 void UKeepersPartyBattleSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
@@ -69,10 +77,17 @@ void UKeepersPartyBattleSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 			Missing.Add(Hero);
 		}
 	}
+	// A hero the squad does not have, or a second copy of a hero, makes room for a missing one.
+	TSet<FName> Seen;
 	for (AActor* Unit : Teams[0])
 	{
 		const FKeepersHeroDef* Def = KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Unit));
-		if (Missing.Num() == 0 || !Def || Def->bEnemy || Party->IsInParty(Def->Id))
+		bool bDuplicate = false;
+		if (Def)
+		{
+			Seen.Add(Def->Id, &bDuplicate);
+		}
+		if (Missing.Num() == 0 || !Def || Def->bEnemy || (Party->IsInParty(Def->Id) && !bDuplicate))
 		{
 			continue;
 		}
@@ -83,13 +98,40 @@ void UKeepersPartyBattleSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 			Missing.RemoveAt(0);
 		}
 	}
-	// Abilities learned on the run's level-ups; the units build their ability lists on BeginPlay.
+	// Campaign battles: wounds, recruits and abilities learned on level-ups.
 	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(&InWorld);
 	if (Campaign && Campaign->IsActive() && Campaign->IsInBattleNode())
 	{
+		// Wounded heroes sit out: a recruit takes the place, or the place stays empty (one hero always fights).
+		int32 Fighting = Teams[0].Num();
 		for (AActor* Unit : Teams[0])
 		{
 			const FKeepersHeroDef* Def = KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Unit));
+			if (!Def || Def->bEnemy || !Campaign->IsWounded(Def->Id))
+			{
+				continue;
+			}
+			FName Base;
+			FString Name;
+			const FKeepersHeroDef* BaseDef = Campaign->GetRecruit(Def->Id, Base, Name) ? KeepersHeroes::Find(Base) : nullptr;
+			if (BaseDef && ChangeUnitType(Unit, static_cast<uint8>(BaseDef->UnitType)))
+			{
+				Nicknames.Add(Unit, FText::FromString(Name));
+				SatOut.Add(Def->Id);
+				UE_LOG(LogKeepersPartyBattle, Log, TEXT("%s is wounded: recruit %s fights instead"), *Def->Id.ToString(), *Name);
+			}
+			else if (Fighting > 1)
+			{
+				--Fighting;
+				SatOut.Add(Def->Id);
+				Unit->Destroy();
+				UE_LOG(LogKeepersPartyBattle, Log, TEXT("%s is wounded and sits this battle out"), *Def->Id.ToString());
+			}
+		}
+		// The units build their ability lists on BeginPlay.
+		for (AActor* Unit : Teams[0])
+		{
+			const FKeepersHeroDef* Def = IsValid(Unit) && !IsRecruit(Unit) ? KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Unit)) : nullptr;
 			for (const FName& Spell : Def && !Def->bEnemy ? Campaign->GetLearnedSpells(Def->Id) : TArray<FName>())
 			{
 				if (KeepersReflection::AddUnitSpell(Unit, Spell.ToString()))

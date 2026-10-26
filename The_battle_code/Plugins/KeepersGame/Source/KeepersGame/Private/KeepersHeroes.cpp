@@ -12,6 +12,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
+#include "KeepersPartyBattle.h"
 #include "KeepersReflection.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKeepersHeroes, Log, All);
@@ -694,6 +695,12 @@ void UKeepersHeroLookSubsystem::Dress(ACharacter* Unit)
 	FName Color;
 	// Enemies of one kind wear different outfits: pick by the unit.
 	LookFor(*Hero, Team, static_cast<int32>(GetTypeHash(Unit->GetName()) % 97), Look, Color);
+	// A recruit wears another outfit of the class than the hero does.
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(Unit);
+	if (Party && Hero->Looks.Num() > 1 && UKeepersPartyBattleSubsystem::IsRecruit(Unit))
+	{
+		Look = Hero->Looks[(Party->GetLookIndex(Hero->Id) + 1 + FMath::RandRange(0, Hero->Looks.Num() - 2)) % Hero->Looks.Num()];
+	}
 
 	// The old mesh keeps animating out of sight: its Anim Blueprint holds the state the figure mirrors.
 	Mesh->SetVisibility(false, false);

@@ -89,6 +89,11 @@ TSharedRef<SWidget> UKeepersCampWidget::RebuildWidget()
 		Smith = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(Smith)->SetPadding(FMargin(0.f, 0.f, 0.f, 22.f));
 
+		InfirmaryTitle = KeepersCamp::SectionTitle(WidgetTree, TEXT("Лазарет"));
+		Column->AddChildToVerticalBox(InfirmaryTitle)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+		Infirmary = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		Column->AddChildToVerticalBox(Infirmary)->SetPadding(FMargin(0.f, 0.f, 0.f, 22.f));
+
 		Column->AddChildToVerticalBox(KeepersCamp::SectionTitle(WidgetTree, TEXT("Торговец")))->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 		Merchant = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(Merchant)->SetPadding(FMargin(0.f, 0.f, 0.f, 26.f));
@@ -183,6 +188,45 @@ void UKeepersCampWidget::Refresh()
 		Smith->AddChildToHorizontalBox(Card)->SetPadding(FMargin(0.f, 0.f, 14.f, 0.f));
 	}
 
+	// The infirmary: the wounded get a healer, or a recruit stands in for them.
+	Infirmary->ClearChildren();
+	const TArray<FName> Wounded = Campaign->GetWounded();
+	InfirmaryTitle->SetVisibility(Wounded.Num() > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	Infirmary->SetVisibility(Wounded.Num() > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	for (const FName& Hero : Wounded)
+	{
+		const FKeepersHeroDef* Def = KeepersHeroes::Find(Hero);
+		UBorder* Card = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Card->SetBrush(KeepersStyle::Panel(KeepersStyle::Ink, 12.f, FLinearColor(0.8f, 0.3f, 0.25f, 0.6f)));
+		Card->SetPadding(FMargin(14.f));
+		UVerticalBox* Lines = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		Lines->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, KeepersCamp::T(FString::Printf(TEXT("%s ранен"), Def ? *Def->Name.ToString() : *Hero.ToString())), KeepersStyle::Heading(22)));
+		FName Base;
+		FString RecruitName;
+		const bool bHasRecruit = Campaign->GetRecruit(Hero, Base, RecruitName);
+		const FKeepersHeroDef* BaseDef = bHasRecruit ? KeepersHeroes::Find(Base) : nullptr;
+		Lines->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, KeepersCamp::T(bHasRecruit
+			? FString::Printf(TEXT("Вместо него выйдет новобранец %s (%s)."), *RecruitName, BaseDef ? *BaseDef->Name.ToString().ToLower() : TEXT(""))
+			: FString(TEXT("Пропустит следующий бой."))), KeepersStyle::Body(13), KeepersStyle::TextDim, true))->SetPadding(FMargin(0.f, 4.f, 0.f, 8.f));
+		UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		UKeepersFnButton* Heal = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
+		Heal->Setup(KeepersCamp::T(FString::Printf(TEXT("Лекарь · %d"), UKeepersCampaignSubsystem::HealerCost())), UKeepersFnButton::EKind::Secondary, 14,
+			[WeakThis, Hero]() { if (WeakThis.IsValid()) { WeakThis->Heal(Hero); } }, 150.f);
+		Heal->SetButtonEnabled(Gold >= UKeepersCampaignSubsystem::HealerCost());
+		Buttons->AddChildToHorizontalBox(Heal)->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		UKeepersFnButton* Hire = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
+		Hire->Setup(KeepersCamp::T(bHasRecruit ? TEXT("Нанят") : FString::Printf(TEXT("Новобранец · %d"), UKeepersCampaignSubsystem::RecruitCost())), UKeepersFnButton::EKind::Secondary, 14,
+			[WeakThis, Hero]() { if (WeakThis.IsValid()) { WeakThis->Hire(Hero); } }, 170.f);
+		Hire->SetButtonEnabled(!bHasRecruit && Gold >= UKeepersCampaignSubsystem::RecruitCost());
+		Buttons->AddChildToHorizontalBox(Hire);
+		Lines->AddChildToVerticalBox(Buttons);
+		USizeBox* CardSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		CardSize->SetWidthOverride(360.f);
+		CardSize->AddChild(Lines);
+		Card->SetContent(CardSize);
+		Infirmary->AddChildToHorizontalBox(Card)->SetPadding(FMargin(0.f, 0.f, 14.f, 0.f));
+	}
+
 	// The merchant: artifacts for gold.
 	Merchant->ClearChildren();
 	for (int32 I = 0; I < Offers.Num(); ++I)
@@ -263,4 +307,32 @@ void UKeepersCampWidget::TestUpgrade(int32 SquadIndex, bool bBoots)
 void UKeepersCampWidget::TestBuy(int32 Offer)
 {
 	Buy(Offer);
+}
+
+void UKeepersCampWidget::Heal(FName Hero)
+{
+	if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(this))
+	{
+		Campaign->HealWound(Hero);
+		Refresh();
+	}
+}
+
+void UKeepersCampWidget::Hire(FName Hero)
+{
+	if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(this))
+	{
+		Campaign->HireRecruit(Hero);
+		Refresh();
+	}
+}
+
+void UKeepersCampWidget::TestInfirmary(int32 Index, bool bRecruit)
+{
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(this);
+	if (Campaign && Campaign->GetWounded().IsValidIndex(Index))
+	{
+		const FName Hero = Campaign->GetWounded()[Index];
+		bRecruit ? Hire(Hero) : Heal(Hero);
+	}
 }

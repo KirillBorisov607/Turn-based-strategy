@@ -25,6 +25,7 @@
 #include "KeepersCamp.h"
 #include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersPartyBattle.h"
 #include "KeepersCreatureSubsystem.h"
 #include "KeepersReflection.h"
 #include "KeepersStyle.h"
@@ -691,6 +692,10 @@ void UKeepersCampaignWorldSubsystem::TestCamp(const UObject* WorldContextObject,
 	{
 		Self->Camp->TestUpgrade(Index, Action == TEXT("boots"));
 	}
+	else if (Self->Camp && (Action == TEXT("heal") || Action == TEXT("recruit")))
+	{
+		Self->Camp->TestInfirmary(Index, Action == TEXT("recruit"));
+	}
 	else if (Self->Camp && Action == TEXT("buy"))
 	{
 		Self->Camp->TestBuy(Index);
@@ -1127,9 +1132,14 @@ void UKeepersCampaignWorldSubsystem::ApplyArtifactsAtBattleStart(UObject* Combat
 				KeepersReflection::AddUnitStat(Hero, TEXT("MP_Current"), Boots);
 			}
 		}
-		// Relics for one hero or for all.
-		const FKeepersHeroDef* Def = KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Hero));
+		// Relics for one hero or for all; a recruit has only the relics for everyone.
+		const bool bRecruit = UKeepersPartyBattleSubsystem::IsRecruit(Hero);
+		const FKeepersHeroDef* Def = bRecruit ? nullptr : KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Hero));
 		const FName Id = Def ? Def->Id : NAME_None;
+		if (Def)
+		{
+			BattleHeroes.Add(Hero, Id);
+		}
 		auto AddHp = [Hero](int32 Amount)
 		{
 			if (Amount <= 0)
@@ -1246,6 +1256,19 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 		return;
 	}
 
+	// The fallen are wounded and sit the next battle out; those who sat this one out are well again.
+	TArray<FName> Fallen;
+	for (const TPair<TWeakObjectPtr<UObject>, FName>& Entry : BattleHeroes)
+	{
+		int32 Hp = 0;
+		if (!Entry.Key.IsValid() || (KeepersReflection::GetUnitStat(Entry.Key.Get(), TEXT("HP_Current"), Hp) && Hp <= 0))
+		{
+			Fallen.Add(Entry.Value);
+		}
+	}
+	const UKeepersPartyBattleSubsystem* PartyBattle = GetWorld()->GetSubsystem<UKeepersPartyBattleSubsystem>();
+	Campaign->ResolveWounds(PartyBattle ? PartyBattle->SatOut : TArray<FName>(), Fallen);
+
 	if (Campaign->IsBossNode(Campaign->GetCurrentNode()))
 	{
 		UKeepersChoiceWidget::FOption Done;
@@ -1258,6 +1281,26 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 		return;
 	}
 
+	if (Fallen.Num() > 0)
+	{
+		FString Names;
+		for (const FName& Hero : Fallen)
+		{
+			const FKeepersHeroDef* Def = KeepersHeroes::Find(Hero);
+			Names += (Names.IsEmpty() ? TEXT("") : TEXT(", ")) + (Def ? Def->Name.ToString() : Hero.ToString());
+		}
+		TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakThis(this);
+		UKeepersChoiceWidget::FOption Next;
+		Next.Title = FText::FromString(TEXT("Дальше"));
+		Next.Description = FText::FromString(TEXT("На привале лекарь поставит на ноги, а за раненого может выйти новобранец."));
+		Next.Color = FLinearColor(0.35f, 0.15f, 0.12f);
+		Next.Image = KeepersCards::Card(TEXT("Hp"));
+		Next.OnPicked = [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->ShowLevelUp(); } };
+		Options.Add(MoveTemp(Next));
+		ShowChoice(FText::FromString(TEXT("Победа, но не без потерь")),
+			FText::FromString(FString::Printf(TEXT("Ранены: %s. Следующий бой они пропустят."), *Names)), MoveTemp(Options));
+		return;
+	}
 	ShowLevelUp();
 }
 

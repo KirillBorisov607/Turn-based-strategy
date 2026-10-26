@@ -20,6 +20,7 @@
 #include "KeepersBattleObjective.h"
 #include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersPartyBattle.h"
 #include "KeepersReflection.h"
 #include "KeepersStyle.h"
 #include "KeepersTerrainSubsystem.h"
@@ -56,6 +57,11 @@ namespace KeepersUnits
 		if (!Ptr || !Byte || !Byte->Enum)
 		{
 			return FText::GetEmpty();
+		}
+		const FText Nickname = UKeepersPartyBattleSubsystem::NicknameOf(Unit);
+		if (!Nickname.IsEmpty())
+		{
+			return Nickname;
 		}
 		const FString English = Byte->Enum->GetDisplayNameTextByValue(Byte->GetPropertyValue(Ptr)).ToString();
 		const FText Local = UKeepersBattleHudSubsystem::LocalUnitName(English);
