@@ -1,4 +1,5 @@
 #include "KeepersChildActorHost.h"
+#include "Engine/BlueprintGeneratedClass.h"
 
 #include "Components/ChildActorComponent.h"
 #include "UObject/UnrealType.h"
@@ -19,7 +20,7 @@ namespace KeepersChildActors
 		{
 			FObjectPropertyBase* Property = *It;
 			// Only Blueprint variables: engine properties such as Owner or Instigator are left alone.
-			if (Property->GetOwnerClass() == nullptr || Property->GetOwnerClass()->ClassGeneratedBy == nullptr)
+			if (!Cast<UBlueprintGeneratedClass>(Property->GetOwnerClass()))
 			{
 				continue;
 			}
