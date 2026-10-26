@@ -7,6 +7,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/Slider.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -19,6 +20,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "KeepersBattleHud.h"
 #include "KeepersMainMenu.h"
 #include "KeepersReflection.h"
 #include "KeepersSettings.h"
@@ -121,6 +123,77 @@ TSharedRef<SWidget> UKeepersSettingsPanel::RebuildWidget()
 	return Super::RebuildWidget();
 }
 
+void UKeepersSettingsPanel::AddSlider(const TCHAR* Label, float Value, TFunction<void(float)> OnChanged, TFunction<FString(float)> Format)
+{
+	UKeepersSliderRow* Row = CreateWidget<UKeepersSliderRow>(this, UKeepersSliderRow::StaticClass());
+	Row->Setup(KeepersSettingsUI::T(Label), Value, MoveTemp(OnChanged), MoveTemp(Format));
+	Rows->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f));
+}
+
+void UKeepersSettingsPanel::AddKeyRow(const TCHAR* Id, const TCHAR* Label)
+{
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+	USizeBox* LabelSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+	LabelSize->SetWidthOverride(330.f);
+	LabelSize->AddChild(KeepersStyle::MakeText(WidgetTree, KeepersSettingsUI::T(Label), KeepersStyle::Body(16)));
+	Row->AddChildToHorizontalBox(LabelSize)->SetVerticalAlignment(VAlign_Center);
+	const bool bWaiting = Rebinding == Id;
+	const FString KeyName = bWaiting ? FString(TEXT("Нажмите клавишу…")) : KeepersSettings::GetKey(Id).GetDisplayName().ToString();
+	UKeepersFnButton* Button = CreateWidget<UKeepersFnButton>(this, UKeepersFnButton::StaticClass());
+	TWeakObjectPtr<UKeepersSettingsPanel> WeakThis(this);
+	const FString Control = Id;
+	Button->Setup(KeepersSettingsUI::T(KeyName), bWaiting ? UKeepersFnButton::EKind::Primary : UKeepersFnButton::EKind::Secondary, 15, [WeakThis, Control]()
+	{
+		if (WeakThis.IsValid())
+		{
+			WeakThis->Rebinding = Control;
+			WeakThis->ShowTab(WeakThis->CurrentTab);
+			WeakThis->SetKeyboardFocus();
+		}
+	}, 220.f);
+	Row->AddChildToHorizontalBox(Button);
+	Rows->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f));
+}
+
+FReply UKeepersSettingsPanel::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (Rebinding.IsEmpty())
+	{
+		return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+	}
+	// Esc cancels; any other key becomes the control's key (and leaves the control that had it).
+	const FKey Key = InKeyEvent.GetKey();
+	if (Key != EKeys::Escape)
+	{
+		for (const KeepersSettings::FKeyBind& Bind : KeepersSettings::KeyBinds())
+		{
+			if (Rebinding != Bind.Id && KeepersSettings::GetKey(Bind.Id) == Key)
+			{
+				KeepersSettings::SetKey(Bind.Id, KeepersSettings::GetKey(*Rebinding));
+			}
+		}
+		KeepersSettings::SetKey(*Rebinding, Key);
+		KeepersSettings::ApplyKeys(this);
+	}
+	Rebinding.Reset();
+	ShowTab(CurrentTab);
+	return FReply::Handled();
+}
+
+FReply UKeepersSettingsPanel::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	// A mouse button can be a control's key too (except the left one, which presses the buttons).
+	if (!Rebinding.IsEmpty() && InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+	{
+		KeepersSettings::SetKey(*Rebinding, InMouseEvent.GetEffectingButton());
+		KeepersSettings::ApplyKeys(this);
+		Rebinding.Reset();
+		ShowTab(CurrentTab);
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
 void UKeepersSettingsPanel::AddRow(const TCHAR* Label, TArray<FText> Options, int32 Current, TFunction<void(int32)> OnChanged)
 {
 	UKeepersSettingRow* Row = CreateWidget<UKeepersSettingRow>(this, UKeepersSettingRow::StaticClass());
@@ -154,33 +227,39 @@ void UKeepersSettingsPanel::ShowTab(int32 Tab)
 				WeakThis->ShowTab(0);
 			}
 		});
+		// Sizes the display supports, the desktop's own among them, without duplicates, small to large.
 		TArray<FIntPoint> Resolutions;
 		UKismetSystemLibrary::GetSupportedFullscreenResolutions(Resolutions);
+		const FIntPoint Desktop = Settings->GetDesktopResolution();
+		Resolutions.AddUnique(Desktop);
+		Resolutions.RemoveAll([](const FIntPoint& R) { return R.X < 1024 || R.Y < 576; });
 		if (Resolutions.Num() == 0)
 		{
 			Resolutions = { FIntPoint(1280, 720), FIntPoint(1600, 900), FIntPoint(1920, 1080) };
 		}
+		Resolutions.Sort([](const FIntPoint& A, const FIntPoint& B) { return A.X * A.Y < B.X * B.Y; });
 		TArray<FText> ResolutionNames;
+		const FIntPoint Wanted = KeepersSettings::GetWantedResolution();
 		int32 CurrentResolution = Resolutions.Num() - 1;
 		for (int32 I = 0; I < Resolutions.Num(); ++I)
 		{
-			ResolutionNames.Add(T(FString::Printf(TEXT("%d × %d"), Resolutions[I].X, Resolutions[I].Y)));
-			if (Resolutions[I] == Settings->GetScreenResolution())
+			const bool bNative = Resolutions[I] == Desktop;
+			ResolutionNames.Add(T(FString::Printf(TEXT("%d × %d%s"), Resolutions[I].X, Resolutions[I].Y, bNative ? TEXT(" (экран)") : TEXT(""))));
+			if (Resolutions[I] == Wanted)
 			{
 				CurrentResolution = I;
 			}
 		}
 		AddRow(TEXT("Разрешение"), MoveTemp(ResolutionNames), CurrentResolution, [Settings, Resolutions](int32 Index)
 		{
-			Settings->SetScreenResolution(Resolutions[Index]);
-			Settings->ApplySettings(false);
+			KeepersSettings::ApplyScreen(Resolutions[Index], Settings->GetFullscreenMode());
 		});
 		const EWindowMode::Type Mode = Settings->GetFullscreenMode();
 		AddRow(TEXT("Режим экрана"), Texts({ TEXT("Полный экран"), TEXT("Без рамки"), TEXT("Окно") }),
 			Mode == EWindowMode::Fullscreen ? 0 : Mode == EWindowMode::WindowedFullscreen ? 1 : 2, [Settings](int32 Index)
 		{
-			Settings->SetFullscreenMode(Index == 0 ? EWindowMode::Fullscreen : Index == 1 ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed);
-			Settings->ApplySettings(false);
+			KeepersSettings::ApplyScreen(KeepersSettings::GetWantedResolution(),
+				Index == 0 ? EWindowMode::Fullscreen : Index == 1 ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed);
 		});
 		AddRow(TEXT("Масштаб рендера"), Percents(50, 100, 10), FMath::Clamp(FMath::RoundToInt(Settings->GetResolutionScaleNormalized() * 5.f), 0, 5), [Settings](int32 Index)
 		{
@@ -247,9 +326,9 @@ void UKeepersSettingsPanel::ShowTab(int32 Tab)
 		for (const FVolumeLine& Line : Lines)
 		{
 			const TCHAR* Key = Line.Key;
-			AddRow(Line.Label, Percents(0, 100, 10), FMath::RoundToInt(FMath::Clamp(KeepersSettings::Get(Key), 0.f, 1.f) * 10.f), [WeakThis, Key](int32 Index)
+			AddSlider(Line.Label, FMath::Clamp(KeepersSettings::Get(Key), 0.f, 1.f), [WeakThis, Key](float Value)
 			{
-				KeepersSettings::Set(Key, Index / 10.f);
+				KeepersSettings::Set(Key, Value);
 				KeepersSettings::ApplyVolume(WeakThis.Get());
 			});
 		}
@@ -267,11 +346,12 @@ void UKeepersSettingsPanel::ShowTab(int32 Tab)
 		for (const FSpeedLine& Line : Lines)
 		{
 			const TCHAR* Key = Line.Key;
-			AddRow(Line.Label, Speeds, SpeedIndex(KeepersSettings::Get(Key)), [WeakThis, Key](int32 Index)
+			// 0..1 on the slider is ×0.5..×2.
+			AddSlider(Line.Label, FMath::Clamp((KeepersSettings::Get(Key) - 0.5f) / 1.5f, 0.f, 1.f), [WeakThis, Key](float Value)
 			{
-				KeepersSettings::Set(Key, SpeedSteps[Index]);
+				KeepersSettings::Set(Key, 0.5f + Value * 1.5f);
 				UKeepersSettingsSubsystem::ApplyNow(WeakThis.Get());
-			});
+			}, [](float Value) { return FString::Printf(TEXT("×%.2g"), 0.5f + Value * 1.5f); });
 		}
 		AddRow(TEXT("Инверсия колёсика"), Texts({ TEXT("Нет"), TEXT("Да") }), Toggle(KeepersSettings::Get(KeepersSettings::InvertZoom)), [WeakThis](int32 Index)
 		{
@@ -282,10 +362,15 @@ void UKeepersSettingsPanel::ShowTab(int32 Tab)
 		{
 			KeepersSettings::Set(KeepersSettings::EdgeScroll, Index);
 		});
+		Rows->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, T(TEXT("Клавиши")), KeepersStyle::Heading(20), KeepersStyle::Gold))->SetPadding(FMargin(0.f, 12.f, 0.f, 4.f));
+		for (const KeepersSettings::FKeyBind& Bind : KeepersSettings::KeyBinds())
+		{
+			AddKeyRow(Bind.Id, Bind.Label);
+		}
 		USizeBox* KeysSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		KeysSize->SetWidthOverride(560.f);
 		KeysSize->AddChild(KeepersStyle::MakeText(WidgetTree,
-			T(TEXT("WASD или стрелки — камера · Q / E — поворот · колёсико — приближение · 1–6 — способности · P или Esc — пауза")),
+			T(TEXT("Щёлкните по клавише и нажмите новую (Esc — отмена). Стрелки всегда двигают камеру, Esc всегда открывает паузу.")),
 			KeepersStyle::Body(13), KeepersStyle::TextDim, true));
 		Rows->AddChildToVerticalBox(KeysSize)->SetPadding(FMargin(4.f, 8.f, 0.f, 0.f));
 	}
@@ -337,6 +422,8 @@ void UKeepersSettingsPanel::ResetTab()
 		break;
 	case 2:
 		ResetKeys({ KeepersSettings::CameraSpeed, KeepersSettings::RotateSpeed, KeepersSettings::ZoomSpeed, KeepersSettings::InvertZoom, KeepersSettings::EdgeScroll });
+		KeepersSettings::ResetKeys();
+		KeepersSettings::ApplyKeys(this);
 		break;
 	default:
 		ResetKeys({ KeepersSettings::BattleSpeed, KeepersSettings::Barks });
@@ -344,6 +431,61 @@ void UKeepersSettingsPanel::ResetTab()
 	}
 	UKeepersSettingsSubsystem::ApplyNow(this);
 	ShowTab(CurrentTab);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+void UKeepersSliderRow::Setup(const FText& Label, float InValue, TFunction<void(float)> InOnChanged, TFunction<FString(float)> InFormat)
+{
+	LabelText = Label;
+	Value = InValue;
+	OnChanged = MoveTemp(InOnChanged);
+	Format = MoveTemp(InFormat);
+}
+
+TSharedRef<SWidget> UKeepersSliderRow::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UBorder* Back = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Back->SetBrush(KeepersStyle::Panel(FLinearColor(1.f, 1.f, 1.f, 0.04f), 8.f, FLinearColor::Transparent));
+		Back->SetPadding(FMargin(10.f, 6.f));
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		USizeBox* LabelSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		LabelSize->SetWidthOverride(220.f);
+		LabelSize->AddChild(KeepersStyle::MakeText(WidgetTree, LabelText, KeepersStyle::Body(16)));
+		Row->AddChildToHorizontalBox(LabelSize)->SetVerticalAlignment(VAlign_Center);
+		Slider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass());
+		Slider->SetValue(Value);
+		Slider->SetStepSize(0.01f);
+		Slider->SetSliderBarColor(FLinearColor(0.35f, 0.3f, 0.22f));
+		Slider->SetSliderHandleColor(KeepersStyle::Gold);
+		Slider->OnValueChanged.AddDynamic(this, &UKeepersSliderRow::HandleChanged);
+		USizeBox* SliderSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		SliderSize->SetWidthOverride(240.f);
+		SliderSize->AddChild(Slider);
+		Row->AddChildToHorizontalBox(SliderSize)->SetVerticalAlignment(VAlign_Center);
+		ValueText = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Body(15, true), KeepersStyle::Gold);
+		Row->AddChildToHorizontalBox(ValueText)->SetPadding(FMargin(14.f, 0.f, 0.f, 0.f));
+		Back->SetContent(Row);
+		WidgetTree->RootWidget = Back;
+		HandleChanged(Value);
+	}
+	return Super::RebuildWidget();
+}
+
+void UKeepersSliderRow::HandleChanged(float NewValue)
+{
+	const bool bChanged = !FMath::IsNearlyEqual(NewValue, Value);
+	Value = NewValue;
+	if (ValueText)
+	{
+		ValueText->SetText(FText::FromString(Format ? Format(Value) : FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.f))));
+	}
+	if (bChanged && OnChanged)
+	{
+		OnChanged(Value);
+	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -397,6 +539,8 @@ void UKeepersSettingsSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 	KeepersSettings::ApplyVolume(&InWorld);
+	KeepersSettings::SanitizeScreen();
+	KeepersSettings::ApplyKeys(&InWorld);
 	bApplied = false;
 }
 
@@ -524,5 +668,24 @@ void UKeepersSettingsSubsystem::Tick(float DeltaTime)
 	if (bBattlePawn && KeepersSettings::Get(KeepersSettings::EdgeScroll) > 0.5f)
 	{
 		EdgeScroll(Player, DeltaTime);
+	}
+	if (bBattlePawn && !UGameplayStatics::IsGamePaused(this))
+	{
+		// Rebound ability keys (the digits keep working through the Blueprint).
+		for (int32 I = 0; I < 6; ++I)
+		{
+			const FKey Key = KeepersSettings::GetKey(*FString::Printf(TEXT("Ability%d"), I + 1));
+			const bool bDigit = Key == EKeys::One || Key == EKeys::Two || Key == EKeys::Three || Key == EKeys::Four || Key == EKeys::Five || Key == EKeys::Six;
+			if (!bDigit && Player->WasInputKeyJustPressed(Key))
+			{
+				UKeepersBattleHudSubsystem::TestAbility(this, I);
+			}
+		}
+		if (Player->WasInputKeyJustPressed(KeepersSettings::GetKey(TEXT("BattleSpeed"))))
+		{
+			const float Speed = KeepersSettings::Get(KeepersSettings::BattleSpeed) >= 2.5f ? 1.f : 3.f;
+			KeepersSettings::Set(KeepersSettings::BattleSpeed, Speed);
+			bApplied = false;
+		}
 	}
 }

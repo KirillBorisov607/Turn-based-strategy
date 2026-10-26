@@ -18,6 +18,7 @@
 #include "KeepersLoadingScreen.h"
 #include "KeepersMainMenu.h"
 #include "KeepersReflection.h"
+#include "KeepersSettings.h"
 #include "KeepersSurfaces.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
@@ -302,6 +303,16 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 	else if (Step.Action == TEXT("squadhero") && Menu && Args.Num() >= 1)
 	{
 		Menu->TestSquad(FName(*Args[0]), Args.Num() > 1 ? FCString::Atoi(*Args[1]) : -1);
+	}
+	else if (Step.Action == TEXT("screen") && Args.Num() >= 3)
+	{
+		const int32 Mode = FCString::Atoi(*Args[2]);
+		KeepersSettings::ApplyScreen(FIntPoint(FCString::Atoi(*Args[0]), FCString::Atoi(*Args[1])),
+			Mode == 0 ? EWindowMode::Fullscreen : Mode == 1 ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed);
+	}
+	else if (Step.Action == TEXT("settings") && Menu && Args.Num() >= 1)
+	{
+		Menu->TestSettings(FCString::Atoi(*Args[0]));
 	}
 	else if (Step.Action == TEXT("look") && Menu && Args.Num() >= 1)
 	{

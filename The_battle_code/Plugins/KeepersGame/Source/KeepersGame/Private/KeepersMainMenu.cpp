@@ -433,6 +433,24 @@ void UKeepersMainMenuWidget::SetDescription(const FText& Text)
 	}
 }
 
+void AKeepersMenuScene::TestSettings(int32 Tab)
+{
+	for (TObjectIterator<UKeepersMainMenuWidget> It; It; ++It)
+	{
+		if (It->GetWorld() == GetWorld())
+		{
+			It->ShowPage(UKeepersMainMenuWidget::EPage::Settings);
+		}
+	}
+	for (TObjectIterator<UKeepersSettingsPanel> It; It; ++It)
+	{
+		if (It->GetWorld() == GetWorld())
+		{
+			It->ShowTab(Tab);
+		}
+	}
+}
+
 void UKeepersMainMenuWidget::ShowPage(EPage Page)
 {
 	CurrentPage = Page;

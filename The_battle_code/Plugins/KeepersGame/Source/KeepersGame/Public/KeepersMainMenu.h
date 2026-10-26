@@ -207,6 +207,8 @@ public:
 	/** Squad screen test hook: choose an outfit of the shown hero, and open it if it is closed. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers")
 	void TestLook(int32 Look, bool bUnlock);
+	/** Test hook: the settings page on a tab. */
+	void TestSettings(int32 Tab);
 
 	/** Where the camp fire burns. */
 	UPROPERTY(EditAnywhere, Category = "Keepers")

@@ -1,4 +1,5 @@
 #include "KeepersPauseMenu.h"
+#include "KeepersSettings.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -229,7 +230,7 @@ void UKeepersPauseWidget::FreezeLevel()
 FReply UKeepersPauseWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	const FKey Key = InKeyEvent.GetKey();
-	if (Key == EKeys::Escape || Key == EKeys::P || Key == EKeys::F10)
+	if (Key == EKeys::Escape || Key == KeepersSettings::GetKey(TEXT("Pause")) || Key == EKeys::F10)
 	{
 		if (Question && Question->GetVisibility() == ESlateVisibility::Visible)
 		{
@@ -274,7 +275,7 @@ void UKeepersPauseSubsystem::Tick(float DeltaTime)
 	{
 		Button = CreateWidget<UKeepersFnButton>(Player, UKeepersFnButton::StaticClass());
 		TWeakObjectPtr<UKeepersPauseSubsystem> WeakThis(this);
-		Button->Setup(FText::FromString(TEXT("Меню · P")), UKeepersFnButton::EKind::Secondary, 18, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->TogglePause(); } }, 150.f);
+		Button->Setup(FText::FromString(FString::Printf(TEXT("Меню · %s"), *KeepersSettings::GetKey(TEXT("Pause")).GetDisplayName().ToString())), UKeepersFnButton::EKind::Secondary, 18, [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->TogglePause(); } }, 150.f);
 		Button->AddToViewport(40);
 		Button->SetAlignmentInViewport(FVector2D(0.f, 0.f));
 		Button->SetPositionInViewport(FVector2D(20.f, 20.f), false);
@@ -283,7 +284,7 @@ void UKeepersPauseSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
-	if (Player->WasInputKeyJustPressed(EKeys::Escape) || Player->WasInputKeyJustPressed(EKeys::P) || Player->WasInputKeyJustPressed(EKeys::F10))
+	if (Player->WasInputKeyJustPressed(EKeys::Escape) || Player->WasInputKeyJustPressed(KeepersSettings::GetKey(TEXT("Pause"))) || Player->WasInputKeyJustPressed(EKeys::F10))
 	{
 		TogglePause();
 	}
