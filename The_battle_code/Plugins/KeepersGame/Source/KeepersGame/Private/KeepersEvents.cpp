@@ -286,6 +286,20 @@ void UKeepersCampaignMapWidget::ShowEvent(int32 NodeIndex)
 			: Choice.Effect == EEffect::Fight || Choice.Effect == EEffect::FightMercenaries ? FString(TEXT("Будет бой.")) : FString());
 		Option.Color = !bAffordable ? FLinearColor(0.18f, 0.18f, 0.2f)
 			: Choice.Effect == EEffect::Fight || Choice.Effect == EEffect::FightMercenaries ? FLinearColor(0.5f, 0.16f, 0.12f) : FLinearColor(0.2f, 0.38f, 0.3f);
+		// The card shows what the choice is about.
+		static const TMap<EEffect, const TCHAR*> Icons =
+		{
+			{ EEffect::None, TEXT("Leave") },
+			{ EEffect::Gold, TEXT("Gold") },
+			{ EEffect::Artifact, TEXT("Relic") },
+			{ EEffect::Armor, TEXT("Armor") },
+			{ EEffect::Boots, TEXT("Boots") },
+			{ EEffect::Glory, TEXT("Glory") },
+			{ EEffect::Fight, TEXT("Fight") },
+			{ EEffect::FightMercenaries, TEXT("Fight") },
+		};
+		// A gamble shows a die: the outcome is not known.
+		Option.Image = KeepersCards::Card(Choice.Chance < 100 ? TEXT("Chance") : Icons.FindRef(Choice.Effect));
 		const FString Title = Event.Title;
 		Option.OnPicked = [WeakThis, WeakCampaign, Choice, Title, NodeIndex, bAffordable]()
 		{

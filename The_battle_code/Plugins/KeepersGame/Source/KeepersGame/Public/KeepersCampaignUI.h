@@ -7,6 +7,7 @@
 class UButton;
 class UCanvasPanel;
 class UTextBlock;
+class UTexture2D;
 class UVerticalBox;
 class UHorizontalBox;
 
@@ -18,6 +19,9 @@ class KEEPERSGAME_API UKeepersOptionButton : public UUserWidget
 
 public:
 	void Setup(const FText& Title, const FText& Description, FLinearColor Color, TFunction<void()> InOnPicked, bool bEnabled = true, float Width = 260.f);
+
+	/** With a picture the button becomes a card: the picture on top, the title and the text under it. */
+	void SetImage(UTexture2D* InImage) { Image = InImage; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -34,10 +38,24 @@ private:
 	FText TitleText;
 	FText DescriptionText;
 	FLinearColor ButtonColor = FLinearColor::White;
+	UPROPERTY()
+	TObjectPtr<UTexture2D> Image;
 	bool bIsEnabled = true;
 	float CardWidth = 260.f;
 	TFunction<void()> OnPicked;
 };
+
+namespace KeepersCards
+{
+	/** A spell icon of /Game/Art/Textures/SpellIcons by name ("Icon_Heal"). */
+	KEEPERSGAME_API UTexture2D* Icon(const TCHAR* Name);
+	/** A card medallion of /Game/Keepers/Icons by name ("Hp" -> T_Card_Hp). */
+	KEEPERSGAME_API UTexture2D* Card(const TCHAR* Name);
+	/** The picture of a relic. */
+	KEEPERSGAME_API UTexture2D* RelicIcon(FName Id);
+	/** A hero's portrait (T_Portrait_<Hero>). */
+	KEEPERSGAME_API UTexture2D* Portrait(FName Hero);
+}
 
 /** A modal panel with a title, a line of text and a row of option cards. */
 UCLASS()
@@ -52,9 +70,14 @@ public:
 		FText Description;
 		FLinearColor Color = FLinearColor(0.25f, 0.4f, 0.6f);
 		TFunction<void()> OnPicked;
+		/** A picture makes the option a card. */
+		UTexture2D* Image = nullptr;
 	};
 
 	void Setup(const FText& Title, const FText& Subtitle, TArray<FOption> Options);
+
+	/** A picture over the title (a hero's portrait). */
+	void SetHeaderImage(UTexture2D* InImage) { HeaderImage = InImage; }
 
 	/** Test hook: picks option Index as a click would. */
 	void TestPick(int32 Index);
@@ -68,6 +91,8 @@ private:
 	TArray<FOption> PendingOptions;
 	UPROPERTY()
 	TArray<TObjectPtr<UKeepersOptionButton>> Cards;
+	UPROPERTY()
+	TObjectPtr<UTexture2D> HeaderImage;
 };
 
 /** The region map: nodes in columns, roads between them, artifacts owned. */
@@ -122,7 +147,7 @@ public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 	/** Shows a modal choice and gives the mouse to the UI. */
-	UKeepersChoiceWidget* ShowChoice(const FText& Title, const FText& Subtitle, TArray<UKeepersChoiceWidget::FOption> Options);
+	UKeepersChoiceWidget* ShowChoice(const FText& Title, const FText& Subtitle, TArray<UKeepersChoiceWidget::FOption> Options, UTexture2D* Header = nullptr);
 
 	/** The camp node: smith, merchant, rest. */
 	void ShowCamp();

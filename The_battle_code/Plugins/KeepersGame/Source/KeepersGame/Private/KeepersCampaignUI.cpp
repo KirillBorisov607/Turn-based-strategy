@@ -6,6 +6,8 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
@@ -146,6 +148,52 @@ namespace KeepersUI
 
 // ---------------------------------------------------------------------------------------------------------------------
 
+UTexture2D* KeepersCards::Icon(const TCHAR* Name)
+{
+	return LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/Art/Textures/SpellIcons/%s.%s"), Name, Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
+
+UTexture2D* KeepersCards::Card(const TCHAR* Name)
+{
+	return LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/Keepers/Icons/T_Card_%s.T_Card_%s"), Name, Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
+
+UTexture2D* KeepersCards::RelicIcon(FName Id)
+{
+	static const TMap<FName, const TCHAR*> Icons =
+	{
+		{ TEXT("StormFeather"), TEXT("Icon_WindGust") },
+		{ TEXT("AncestorStone"), TEXT("Icon_RaiseRock") },
+		{ TEXT("WorldTreeRoot"), TEXT("Icon_Roots") },
+		{ TEXT("RangerBoots"), TEXT("Move") },
+		{ TEXT("ScaleMail"), TEXT("Armor") },
+		{ TEXT("ShepherdBell"), TEXT("Bell") },
+		{ TEXT("SaltyBiscuit"), TEXT("Icon_SlimeBall") },
+		{ TEXT("OakHeart"), TEXT("Icon_Sprout") },
+		{ TEXT("WarDrum"), TEXT("Drum") },
+		{ TEXT("VeteranCloak"), TEXT("Cloak") },
+		{ TEXT("HawkFeather"), TEXT("Feather") },
+		{ TEXT("DruidAcorn"), TEXT("Acorn") },
+		{ TEXT("CampEmber"), TEXT("Ember") },
+		{ TEXT("LuckyCoin"), TEXT("Coin") },
+		{ TEXT("GloryBanner"), TEXT("Banner") },
+		{ TEXT("SwiftCharm"), TEXT("Charm") },
+	};
+	// Relics of the abilities wear the abilities' pictures; the rest have their own medallions.
+	const TCHAR* const* Name = Icons.Find(Id);
+	if (!Name)
+	{
+		return Card(TEXT("Relic"));
+	}
+	return FCString::Strncmp(*Name, TEXT("Icon_"), 5) == 0 ? Icon(*Name) : Card(*Name);
+}
+
+UTexture2D* KeepersCards::Portrait(FName Hero)
+{
+	const FString Name = Hero.ToString();
+	return LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/Keepers/Portraits/T_Portrait_%s.T_Portrait_%s"), *Name, *Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
+
 void UKeepersOptionButton::Setup(const FText& Title, const FText& Description, FLinearColor Color, TFunction<void()> InOnPicked, bool bEnabled, float Width)
 {
 	TitleText = Title;
@@ -179,10 +227,38 @@ TSharedRef<SWidget> UKeepersOptionButton::RebuildWidget()
 		Button->OnClicked.AddDynamic(this, &UKeepersOptionButton::HandleClicked);
 
 		UVerticalBox* Lines = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Lines->AddChildToVerticalBox(KeepersUI::MakeText(WidgetTree, TitleText, 17, bIsEnabled ? FLinearColor::White : FLinearColor(0.75f, 0.75f, 0.75f)));
+		if (Image)
+		{
+			// A card: the picture on a dark plate, then the title and the text, all centred.
+			Size->SetMinDesiredHeight(290.f);
+			UBorder* Plate = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+			Plate->SetBrush(KeepersUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.35f), 14.f));
+			Plate->SetPadding(FMargin(14.f));
+			Plate->SetHorizontalAlignment(HAlign_Center);
+			UImage* Picture = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+			Picture->SetBrushFromTexture(Image);
+			USizeBox* PictureSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+			PictureSize->SetWidthOverride(112.f);
+			PictureSize->SetHeightOverride(112.f);
+			PictureSize->AddChild(Picture);
+			Plate->SetContent(PictureSize);
+			if (UVerticalBoxSlot* PlateSlot = Lines->AddChildToVerticalBox(Plate))
+			{
+				PlateSlot->SetHorizontalAlignment(HAlign_Center);
+				PlateSlot->SetPadding(FMargin(0.f, 4.f, 0.f, 12.f));
+			}
+		}
+		UTextBlock* Title = KeepersUI::MakeText(WidgetTree, TitleText, Image ? 20 : 17, bIsEnabled ? FLinearColor::White : FLinearColor(0.75f, 0.75f, 0.75f));
+		Title->SetJustification(Image ? ETextJustify::Center : ETextJustify::Left);
+		if (UVerticalBoxSlot* TitleSlot = Lines->AddChildToVerticalBox(Title))
+		{
+			TitleSlot->SetHorizontalAlignment(Image ? HAlign_Center : HAlign_Fill);
+		}
 		if (!DescriptionText.IsEmpty())
 		{
-			if (UVerticalBoxSlot* DescriptionSlot = Lines->AddChildToVerticalBox(KeepersUI::MakeText(WidgetTree, DescriptionText, 12, FLinearColor(0.85f, 0.85f, 0.85f), true)))
+			UTextBlock* Description = KeepersUI::MakeText(WidgetTree, DescriptionText, Image ? 14 : 12, FLinearColor(0.88f, 0.88f, 0.88f), true);
+			Description->SetJustification(Image ? ETextJustify::Center : ETextJustify::Left);
+			if (UVerticalBoxSlot* DescriptionSlot = Lines->AddChildToVerticalBox(Description))
 			{
 				DescriptionSlot->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 			}
@@ -241,7 +317,26 @@ TSharedRef<SWidget> UKeepersChoiceWidget::RebuildWidget()
 		Panel->SetPadding(FMargin(32.f, 24.f));
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Column->AddChildToVerticalBox(KeepersUI::MakeText(WidgetTree, TitleText, 28, KeepersUI::Gold));
+		if (HeaderImage)
+		{
+			UImage* Header = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+			Header->SetBrushFromTexture(HeaderImage);
+			USizeBox* HeaderSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+			HeaderSize->SetWidthOverride(120.f);
+			HeaderSize->SetHeightOverride(120.f);
+			HeaderSize->AddChild(Header);
+			if (UVerticalBoxSlot* HeaderSlot = Column->AddChildToVerticalBox(HeaderSize))
+			{
+				HeaderSlot->SetHorizontalAlignment(HAlign_Center);
+				HeaderSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+			}
+		}
+		UTextBlock* Heading = KeepersUI::MakeText(WidgetTree, TitleText, 28, KeepersUI::Gold);
+		Heading->SetJustification(ETextJustify::Center);
+		if (UVerticalBoxSlot* HeadingSlot = Column->AddChildToVerticalBox(Heading))
+		{
+			HeadingSlot->SetHorizontalAlignment(HAlign_Center);
+		}
 		if (!SubtitleText.IsEmpty())
 		{
 			USizeBox* Wrap = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
@@ -258,7 +353,8 @@ TSharedRef<SWidget> UKeepersChoiceWidget::RebuildWidget()
 		for (FOption& Option : PendingOptions)
 		{
 			UKeepersOptionButton* Card = CreateWidget<UKeepersOptionButton>(this, UKeepersOptionButton::StaticClass());
-			Card->Setup(Option.Title, Option.Description, Option.Color, MoveTemp(Option.OnPicked));
+			Card->Setup(Option.Title, Option.Description, Option.Color, MoveTemp(Option.OnPicked), true, Option.Image ? 230.f : 260.f);
+			Card->SetImage(Option.Image);
 			Cards.Add(Card);
 			if (UHorizontalBoxSlot* CardSlot = Row->AddChildToHorizontalBox(Card))
 			{
@@ -490,6 +586,7 @@ void UKeepersCampaignMapWidget::ShowArtifactChoice(const FText& Title, const FTe
 		Option.Title = Artifact->Name;
 		Option.Description = Artifact->Description;
 		Option.Color = FLinearColor(0.3f, 0.25f, 0.1f);
+		Option.Image = KeepersCards::RelicIcon(Id);
 		Option.OnPicked = [WeakCampaign, Id]()
 		{
 			if (WeakCampaign.IsValid())
@@ -617,13 +714,14 @@ void UKeepersCampaignWorldSubsystem::TestCamp(const UObject* WorldContextObject,
 	}
 }
 
-UKeepersChoiceWidget* UKeepersCampaignWorldSubsystem::ShowChoice(const FText& Title, const FText& Subtitle, TArray<UKeepersChoiceWidget::FOption> Options)
+UKeepersChoiceWidget* UKeepersCampaignWorldSubsystem::ShowChoice(const FText& Title, const FText& Subtitle, TArray<UKeepersChoiceWidget::FOption> Options, UTexture2D* Header)
 {
 	APlayerController* Player = GetWorld()->GetFirstPlayerController();
 	UKeepersChoiceWidget* Choice = Player ? CreateWidget<UKeepersChoiceWidget>(Player, UKeepersChoiceWidget::StaticClass()) : nullptr;
 	if (Choice)
 	{
 		Choice->Setup(Title, Subtitle, MoveTemp(Options));
+		Choice->SetHeaderImage(Header);
 		Choice->AddToViewport(50);
 		SetUiInput(Choice);
 	}
@@ -1067,12 +1165,13 @@ void UKeepersCampaignWorldSubsystem::ShowLevelUp()
 		const TCHAR* Title;
 		const TCHAR* Description;
 		FLinearColor Color;
+		const TCHAR* Icon;
 	};
 	static const FGrowthCard Cards[] =
 	{
-		{ EKeepersGrowth::Hp, TEXT("Закалка"), TEXT("+5 к здоровью"), FLinearColor(0.45f, 0.15f, 0.12f) },
-		{ EKeepersGrowth::Move, TEXT("Лёгкий шаг"), TEXT("+1 к очкам движения"), FLinearColor(0.15f, 0.35f, 0.5f) },
-		{ EKeepersGrowth::Action, TEXT("Боевой опыт"), TEXT("+1 к очкам действия"), FLinearColor(0.4f, 0.32f, 0.1f) },
+		{ EKeepersGrowth::Hp, TEXT("Закалка"), TEXT("+5 к здоровью"), FLinearColor(0.45f, 0.15f, 0.12f), TEXT("Hp") },
+		{ EKeepersGrowth::Move, TEXT("Лёгкий шаг"), TEXT("+1 к очкам движения"), FLinearColor(0.15f, 0.35f, 0.5f), TEXT("Move") },
+		{ EKeepersGrowth::Action, TEXT("Боевой опыт"), TEXT("+1 к очкам действия"), FLinearColor(0.4f, 0.32f, 0.1f), TEXT("Action") },
 	};
 	TArray<UKeepersChoiceWidget::FOption> Options;
 	for (const FGrowthCard& Card : Cards)
@@ -1081,6 +1180,7 @@ void UKeepersCampaignWorldSubsystem::ShowLevelUp()
 		Option.Title = FText::FromString(Card.Title);
 		Option.Description = FText::FromString(Card.Description);
 		Option.Color = Card.Color;
+		Option.Image = KeepersCards::Card(Card.Icon);
 		const EKeepersGrowth Growth = Card.Growth;
 		Option.OnPicked = [WeakThis, WeakCampaign, Hero, Growth]()
 		{
@@ -1098,7 +1198,7 @@ void UKeepersCampaignWorldSubsystem::ShowLevelUp()
 	ShowChoice(FText::FromString(FString::Printf(TEXT("%s — уровень %d"), *Name, Campaign->GetHeroLevel(Hero) + 1)),
 		FText::FromString(FString::Printf(TEXT("Бой не прошёл даром. Чему %s научился? Сейчас: +%d здоровья, +%d движения, +%d действия."), *Name,
 			Campaign->GetGrowth(Hero, EKeepersGrowth::Hp) * 5, Campaign->GetGrowth(Hero, EKeepersGrowth::Move), Campaign->GetGrowth(Hero, EKeepersGrowth::Action))),
-		MoveTemp(Options));
+		MoveTemp(Options), KeepersCards::Portrait(Hero));
 }
 
 void UKeepersCampaignWorldSubsystem::ShowVictoryRelics()
@@ -1117,6 +1217,7 @@ void UKeepersCampaignWorldSubsystem::ShowVictoryRelics()
 		Option.Title = Artifact->Name;
 		Option.Description = Artifact->Description;
 		Option.Color = FLinearColor(0.3f, 0.25f, 0.1f);
+		Option.Image = KeepersCards::RelicIcon(Id);
 		Option.OnPicked = [WeakCampaign, Id]()
 		{
 			if (WeakCampaign.IsValid())

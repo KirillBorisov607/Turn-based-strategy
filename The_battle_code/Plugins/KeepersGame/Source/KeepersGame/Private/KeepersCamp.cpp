@@ -14,6 +14,7 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "KeepersCampaign.h"
+#include "KeepersCampaignUI.h"
 #include "KeepersHeroes.h"
 #include "KeepersSquad.h"
 #include "KeepersStyle.h"
@@ -197,7 +198,18 @@ void UKeepersCampWidget::Refresh()
 		USizeBox* CardSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		CardSize->SetWidthOverride(300.f);
 		UVerticalBox* Lines = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Lines->AddChildToVerticalBox(KeepersStyle::MakeText(WidgetTree, Artifact->Name, KeepersStyle::Heading(22), Sold[I] ? KeepersStyle::TextDim : KeepersStyle::Text));
+		// The relic's picture beside its name.
+		UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		USizeBox* IconSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		IconSize->SetWidthOverride(64.f);
+		IconSize->SetHeightOverride(64.f);
+		UImage* Icon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		Icon->SetBrushFromTexture(KeepersCards::RelicIcon(Offers[I]));
+		Icon->SetRenderOpacity(Sold[I] ? 0.4f : 1.f);
+		IconSize->AddChild(Icon);
+		Head->AddChildToHorizontalBox(IconSize)->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+		Head->AddChildToHorizontalBox(KeepersStyle::MakeText(WidgetTree, Artifact->Name, KeepersStyle::Heading(22), Sold[I] ? KeepersStyle::TextDim : KeepersStyle::Text))->SetVerticalAlignment(VAlign_Center);
+		Lines->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 		USizeBox* DescriptionSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		DescriptionSize->SetMinDesiredHeight(54.f);
 		DescriptionSize->AddChild(KeepersStyle::MakeText(WidgetTree, Artifact->Description, KeepersStyle::Body(13), KeepersStyle::TextDim, true));
