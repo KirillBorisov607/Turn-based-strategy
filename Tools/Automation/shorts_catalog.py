@@ -203,9 +203,9 @@ def relic_panel(relics):
 
 def objective_panel(o):
     def panel(layer, t):
-        card(layer, 60, PANEL_Y, 860, 160, "Правило", o[4], "Glory", t, 0.4)
-        card(layer, 60, PANEL_Y + 180, 860, 160, "Как победить", o[5], "Fight", t, 2.4, GREEN)
-        card(layer, 60, PANEL_Y + 360, 860, 160, "Что делают враги", o[6], "Unknown", t, 4.4, RED)
+        card(layer, 60, PANEL_Y, 860, 160, "Правило", o[5], "Glory", t, 0.4)
+        card(layer, 60, PANEL_Y + 180, 860, 160, "Как победить", o[6], "Fight", t, 2.4, GREEN)
+        card(layer, 60, PANEL_Y + 360, 860, 160, "Что делают враги", o[7], "Unknown", t, 4.4, RED)
     return panel
 
 
@@ -374,7 +374,7 @@ def catalog():
     # Objectives.
     for o in OBJECTIVES:
         add("goal_" + o[0], "ЗАДАНИЕ БОЯ", o[1], 9.0, Footage([(o[2], o[3], o[4], 1)]), objective_panel(o),
-            "%s. %s %s" % (o[1], o[4], o[5]), "#тактика", BLUE, pops=[(0.4, "Card"), (2.4, "Card"), (4.4, "Card")])
+            "%s. %s %s" % (o[1], o[5], o[6]), "#тактика", BLUE, pops=[(0.4, "Card"), (2.4, "Card"), (4.4, "Card")])
     # Tactics tips.
     for k, tip in enumerate(TIPS, 1):
         add("tip_%02d" % k, "СОВЕТ", tip[0], 9.0, Footage([(tip[3], tip[4], tip[5], 1)]), tip_panel(k, tip),

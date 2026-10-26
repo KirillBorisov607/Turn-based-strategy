@@ -44,7 +44,7 @@ def font(size, kind="body"):
 
 
 F = {k: font(*k) for k in [(72, "title"), (58, "title"), (46, "title"), (40, "title"), (34, "bold"), (30, "bold"), (28, "body"),
-                           (26, "body"), (24, "bold"), (22, "body"), (56, "num"), (40, "num"), (90, "num"), (130, "num")]}
+                           (26, "body"), (26, "bold"), (24, "bold"), (22, "body"), (56, "num"), (40, "num"), (90, "num"), (130, "num")]}
 
 
 def ease_out(x):
