@@ -116,17 +116,31 @@ void UKeepersDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		AKeepersBattleObjective::RequestForNextBattle(Goal == TEXT("reach") ? EKeepersObjectiveKind::Reach
 			: Goal == TEXT("leader") ? EKeepersObjectiveKind::Leader : Goal == TEXT("survive") ? EKeepersObjectiveKind::Survive
 			: Goal == TEXT("totem") ? EKeepersObjectiveKind::Totem : EKeepersObjectiveKind::None);
+		if (Goal == TEXT("leader"))
+		{
+			if (UKeepersCampaignSubsystem* Campaign = Collection.InitializeDependency<UKeepersCampaignSubsystem>())
+			{
+				Campaign->bMercenaryQuickBattle = true;
+			}
+		}
 	}
 	// Ice or marsh patches in the first battle: -KeepersSurface=ice|marsh.
 	FString Surface;
 	if (FParse::Value(CommandLine, TEXT("-KeepersSurface="), Surface))
 	{
 		UKeepersSurfaceSubsystem::RequestForNextBattle(Surface == TEXT("ice") ? EKeepersSurface::Ice : Surface == TEXT("marsh") ? EKeepersSurface::Marsh : EKeepersSurface::None);
-		if (Goal == TEXT("leader"))
+	}
+	// Enemies joining the first battle by E_UnitType: -KeepersBand=12,13,14.
+	FString Band;
+	if (FParse::Value(CommandLine, TEXT("-KeepersBand="), Band, false))
+	{
+		if (UKeepersCampaignSubsystem* Campaign = Collection.InitializeDependency<UKeepersCampaignSubsystem>())
 		{
-			if (UKeepersCampaignSubsystem* Campaign = Collection.InitializeDependency<UKeepersCampaignSubsystem>())
+			TArray<FString> Types;
+			Band.ParseIntoArray(Types, TEXT(","));
+			for (const FString& Type : Types)
 			{
-				Campaign->bMercenaryQuickBattle = true;
+				Campaign->NextBand.Add(static_cast<uint8>(FCString::Atoi(*Type)));
 			}
 		}
 	}

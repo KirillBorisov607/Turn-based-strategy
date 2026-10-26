@@ -80,6 +80,9 @@ namespace KeepersHeroes
 			S(TEXT("SmokeBomb"), TEXT("Дымовая шашка"), TEXT("Дым на клетке и вокруг закрывает обзор на два хода."), TEXT("1–3 клетки · перезарядка 3"), P::Cast),
 			S(TEXT("Crush"), TEXT("Сокрушить"), TEXT("Мощный удар; скалы и деревья вокруг цели — в щепки."), TEXT("5–7 урона · рядом")),
 			S(TEXT("Throw"), TEXT("Бросок врага"), TEXT("Хватает соседа и бросает через себя: в воду — насмерть."), TEXT("2 урона + бросок · рядом")),
+			S(TEXT("Boulder"), TEXT("Валун"), TEXT("Катапульта бросает валун: он бьёт по области и остаётся на поле скалой."), TEXT("3–4 урона · область · 3–6 клеток")),
+			S(TEXT("RamStrike"), TEXT("Удар тарана"), TEXT("Таран отбрасывает соседа на клетку."), TEXT("4–5 урона · толчок · рядом")),
+			S(TEXT("Charge"), TEXT("Натиск"), TEXT("Всадник мчится по прямой и сбивает врагов у места остановки."), TEXT("2–3 урона · 2–4 клетки")),
 			S(TEXT("Rage"), TEXT("Ярость"), TEXT("Платит здоровьем и сразу действует ещё раз, +1 к движению."), TEXT("−4 HP · раз за ход · перезарядка 3"), P::Cast),
 		};
 	}
@@ -236,6 +239,63 @@ namespace KeepersHeroes
 			MakeLook(TEXT("Громила"), A::TwoHanded, TEXT("Unit_Body_13b"), TEXT("Unit_Head_12b"), TEXT("SM_w_TH_maul_B")),
 			MakeLook(TEXT("Дровосек"), A::TwoHanded, TEXT("Unit_Body_13a"), TEXT("Unit_Head_12d"), TEXT("SM_w_TH_Axe_B")),
 			MakeLook(TEXT("Молотобоец"), A::TwoHanded, TEXT("Unit_Body_09d"), TEXT("Unit_Head_08b"), TEXT("SM_w_TH_warhammer")),
+		};
+
+		// The elite: riders.
+		FKeepersHeroDef& Cavalry = Enemies.AddDefaulted_GetRef();
+		Cavalry.Id = TEXT("Cavalry");
+		Cavalry.Name = T(TEXT("Всадник"));
+		Cavalry.Class = T(TEXT("Элита кур"));
+		Cavalry.UnitType = 12;
+		Cavalry.bEnemy = true;
+		Cavalry.Scale = 0.75f;
+		Cavalry.Spells = { TEXT("SwordSlash"), TEXT("Charge") };
+		Cavalry.Looks = {
+			MakeLook(TEXT("Рыцарь"), A::Cavalry, TEXT("SK_Knight"), TEXT("")),
+			MakeLook(TEXT("Лёгкий всадник"), A::Cavalry, TEXT("SK_Light_Cavalry"), TEXT("")),
+			MakeLook(TEXT("Латник"), A::Cavalry, TEXT("SK_Heavy_Cavalry"), TEXT("")),
+		};
+
+		// Siege machines of the bosses.
+		FKeepersHeroDef& Catapult = Enemies.AddDefaulted_GetRef();
+		Catapult.Id = TEXT("Catapult");
+		Catapult.Name = T(TEXT("Катапульта"));
+		Catapult.Class = T(TEXT("Осадная машина"));
+		Catapult.UnitType = 13;
+		Catapult.bEnemy = true;
+		Catapult.Scale = 0.6f;
+		Catapult.Spells = { TEXT("Boulder") };
+		Catapult.Looks = {
+			MakeLook(TEXT("Катапульта"), A::Catapult, TEXT("SK_Catapult_lvl1"), TEXT("")),
+			MakeLook(TEXT("Окованная катапульта"), A::Catapult, TEXT("SK_Catapult_lvl2"), TEXT("")),
+			MakeLook(TEXT("Боевая катапульта"), A::Catapult, TEXT("SK_Catapult_lvl3"), TEXT("")),
+		};
+
+		FKeepersHeroDef& Ram = Enemies.AddDefaulted_GetRef();
+		Ram.Id = TEXT("Ram");
+		Ram.Name = T(TEXT("Таран"));
+		Ram.Class = T(TEXT("Осадная машина"));
+		Ram.UnitType = 14;
+		Ram.bEnemy = true;
+		Ram.Scale = 0.6f;
+		Ram.Spells = { TEXT("RamStrike") };
+		Ram.Looks = {
+			MakeLook(TEXT("Таран"), A::Ram, TEXT("SK_Ram_lvl1"), TEXT("")),
+			MakeLook(TEXT("Окованный таран"), A::Ram, TEXT("SK_Ram_lvl2"), TEXT("")),
+			MakeLook(TEXT("Таран с навесом"), A::Ram, TEXT("SK_Ram_lvl3"), TEXT("")),
+		};
+
+		// The shaman raises rocks and grows forest for the chickens.
+		FKeepersHeroDef& Shaman = Enemies.AddDefaulted_GetRef();
+		Shaman.Id = TEXT("Shaman");
+		Shaman.Name = T(TEXT("Шаман кур"));
+		Shaman.Class = T(TEXT("Колдун кур"));
+		Shaman.UnitType = 15;
+		Shaman.bEnemy = true;
+		Shaman.Spells = { TEXT("RaiseRock"), TEXT("Sprout"), TEXT("Roots") };
+		Shaman.Looks = {
+			MakeLook(TEXT("Шаман"), A::Staff, TEXT("Unit_Body_12b"), TEXT("Unit_Head_10b"), TEXT("SM_w_staff_D")),
+			MakeLook(TEXT("Гадатель"), A::Staff, TEXT("Unit_Body_12d"), TEXT("Unit_Head_06c"), TEXT("SM_w_staff_A")),
 		};
 		return Enemies;
 	}
@@ -665,8 +725,13 @@ UTextureRenderTarget2D* UKeepersHeroLookSubsystem::GetPortrait(FName HeroId, boo
 	Target->InitCustomFormat(192, 192, PF_B8G8R8A8, true);
 	USceneCaptureComponent2D* Capture = NewObject<USceneCaptureComponent2D>(Studio);
 	Capture->SetupAttachment(Studio->GetRootComponent());
-	// Head and shoulders.
-	Capture->SetWorldLocationAndRotation(Spot + FVector(0.f, -200.f, 140.f), FRotator(-6.f, 90.f, 0.f));
+	// Head and shoulders; riders and machines whole, from further away and a little to the side.
+	const bool bBig = Look.AnimSet == EKeepersAnimSet::Cavalry || Look.AnimSet == EKeepersAnimSet::Catapult || Look.AnimSet == EKeepersAnimSet::Ram;
+	if (bBig)
+	{
+		Figure->SetWorldRotation(FRotator(0.f, 215.f, 0.f));
+	}
+	Capture->SetWorldLocationAndRotation(Spot + (bBig ? FVector(0.f, -560.f, 230.f) : FVector(0.f, -200.f, 140.f)), FRotator(bBig ? -12.f : -6.f, 90.f, 0.f));
 	Capture->FOVAngle = 30.f;
 	Capture->TextureTarget = Target;
 	Capture->CaptureSource = SCS_FinalColorLDR;

@@ -265,6 +265,10 @@ FText UKeepersBattleHudSubsystem::LocalUnitName(const FString& EnglishName)
 		{ TEXT("mage"), TEXT("Маг") },
 		{ TEXT("rogue"), TEXT("Плут") },
 		{ TEXT("barbarian"), TEXT("Варвар") },
+		{ TEXT("cavalry"), TEXT("Всадник") },
+		{ TEXT("catapult"), TEXT("Катапульта") },
+		{ TEXT("ram"), TEXT("Таран") },
+		{ TEXT("shaman"), TEXT("Шаман кур") },
 	};
 	const FString* Name = Names.Find(EnglishName.TrimStartAndEnd().ToLower());
 	return Name ? FText::FromString(*Name) : FText::GetEmpty();

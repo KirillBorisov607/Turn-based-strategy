@@ -21,6 +21,8 @@ namespace KeepersAi
 		TWeakObjectPtr<UObject> Grid;
 		uint64 Frame = MAX_uint64;
 		TMap<FIntPoint, FTile> Tiles;
+		/** Cells of team 0. */
+		TArray<FIntPoint> Heroes;
 		float Step = 100.f;
 		bool bHex = true;
 	};
@@ -35,6 +37,7 @@ namespace KeepersAi
 		Cache.Grid = Grid;
 		Cache.Frame = GFrameCounter;
 		Cache.Tiles.Reset();
+		Cache.Heroes.Reset();
 		if (const FVector* Size = static_cast<const FVector*>(KeepersReflection::FindValuePtr(Grid->GetClass(), Grid, TEXT("GridTileSize"))))
 		{
 			Cache.Step = Size->Z;
@@ -71,6 +74,14 @@ namespace KeepersAi
 				}
 			}
 			Cache.Tiles.Add(Index, Tile);
+			if (Tile.Unit)
+			{
+				int32 Team = 1;
+				if (KeepersReflection::GetInt(Tile.Unit->GetClass(), Tile.Unit, TEXT("TeamIndex"), Team) && Team == 0)
+				{
+					Cache.Heroes.Add(Index);
+				}
+			}
 		}
 		return Cache;
 	}
@@ -88,6 +99,77 @@ namespace KeepersAi
 		int32 Team = 0;
 		KeepersReflection::GetInt(Unit->GetClass(), Unit, TEXT("TeamIndex"), Team);
 		return Team;
+	}
+
+	/** E_Spell value of an entry name, MAX_uint8 when there is none. */
+	static uint8 SpellValue(const TCHAR* Name)
+	{
+		static TMap<FString, uint8> Values;
+		if (const uint8* Found = Values.Find(Name))
+		{
+			return *Found;
+		}
+		uint8 Value = MAX_uint8;
+		if (const UEnum* Spells = LoadObject<UEnum>(nullptr, TEXT("/Game/Blueprints/Core/Combat/Spells/Utilities/E_Spell.E_Spell")))
+		{
+			for (int32 I = 0; I < Spells->NumEnums() - 1; ++I)
+			{
+				if (Spells->GetDisplayNameTextByIndex(I).ToString() == Name)
+				{
+					Value = static_cast<uint8>(Spells->GetValueByIndex(I));
+				}
+			}
+		}
+		Values.Add(Name, Value);
+		return Value;
+	}
+
+	/** Steps from a cell to the nearest hero, 99 when there is none. */
+	static int32 StepsToHeroes(const FGridCache& Map, const FIntPoint& Cell)
+	{
+		int32 Best = 99;
+		for (const FIntPoint& Hero : Map.Heroes)
+		{
+			Best = FMath::Min(Best, StepsBetween(Map.bHex, Cell, Hero));
+		}
+		return Best;
+	}
+
+	/**
+	 * Worth of an enemy's rock or forest (they deal no damage, so the plan's own score is 0):
+	 * a rock next to heroes walls them in, a rock between the caster and the heroes is cover,
+	 * forest under a hero's feet or next to it slows them down.
+	 */
+	static double TerrainPlanScore(const FGridCache& Map, uint8 Spell, const FIntPoint& Origin, const FIntPoint& Target)
+	{
+		const bool bRock = Spell == SpellValue(TEXT("RaiseRock"));
+		const bool bForest = Spell == SpellValue(TEXT("Sprout"));
+		const FTile* At = Map.Tiles.Find(Target);
+		if ((!bRock && !bForest) || !At || At->Type != 1)
+		{
+			return 0.0;
+		}
+		int32 HeroesNext = 0;
+		for (const FIntPoint& Hero : Map.Heroes)
+		{
+			HeroesNext += StepsBetween(Map.bHex, Hero, Target) == 1 ? 1 : 0;
+		}
+		if (bRock)
+		{
+			if (At->Unit)
+			{
+				return 0.0;
+			}
+			double Value = HeroesNext > 0 ? 1.3 + 0.3 * (HeroesNext - 1) : 0.0;
+			const int32 FromOrigin = StepsToHeroes(Map, Origin);
+			if (StepsBetween(Map.bHex, Origin, Target) == 1 && FromOrigin <= 5 && StepsToHeroes(Map, Target) < FromOrigin)
+			{
+				Value = FMath::Max(Value, 1.1);
+			}
+			return Value;
+		}
+		const bool bUnderHero = At->Unit && Map.Heroes.Contains(Target);
+		return bUnderHero ? 1.2 : HeroesNext > 0 && !At->Unit ? 0.8 : 0.0;
 	}
 
 	/** UnitData.Stats.ValidTileTypes has FlyingUnitsOnly. */
@@ -122,7 +204,7 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, uint8 Spell, FIntPoint 
 {
 	using namespace KeepersAi;
 	UObject* Grid = Unit ? KeepersReflection::GetObject(Unit, TEXT("Grid")) : nullptr;
-	if (!Grid || BaseScore <= 0.0)
+	if (!Grid)
 	{
 		return BaseScore;
 	}
@@ -134,6 +216,19 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, uint8 Spell, FIntPoint 
 		return BaseScore;
 	}
 	const int32 Team = TeamOf(Unit);
+	// Rocks and forest of the enemies (the shaman's): scored here, they deal no damage.
+	if (Team != 0)
+	{
+		const double Terrain = TerrainPlanScore(Map, Spell, Origin, Target);
+		if (Terrain > 0.0)
+		{
+			return FMath::Max(BaseScore, 0.0) + Terrain;
+		}
+	}
+	if (BaseScore <= 0.0)
+	{
+		return BaseScore;
+	}
 	double Bonus = 0.0;
 	// The battle's objective changes what the enemies want (only the enemies of the heroes read it).
 	const AKeepersBattleObjective* Objective = Team != 0 ? AKeepersBattleObjective::Find(Unit->GetWorld()) : nullptr;

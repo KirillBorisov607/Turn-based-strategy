@@ -23,7 +23,7 @@ namespace KeepersTerrain
 {
 	static const FString RaiseRockAnimation = TEXT("BP_SpellAnim_RaiseRock");
 	/** Spell animations whose hit pushes the target. */
-	static const TArray<FString> PushAnimations = { TEXT("BP_SpellAnim_Gust"), TEXT("BP_SpellAnim_ShieldBash") };
+	static const TArray<FString> PushAnimations = { TEXT("BP_SpellAnim_Gust"), TEXT("BP_SpellAnim_ShieldBash"), TEXT("BP_SpellAnim_RamStrike") };
 	static const FString SproutAnimation = TEXT("BP_SpellAnim_Sprout");
 	static const FString RootsAnimation = TEXT("BP_SpellAnim_Roots");
 	/** Animations of the heroes' newer abilities and their effects. */
@@ -38,6 +38,8 @@ namespace KeepersTerrain
 		{ TEXT("BP_SpellAnim_Crush"), EKeepersTerrainEffect::Crush },
 		{ TEXT("BP_SpellAnim_Throw"), EKeepersTerrainEffect::Throw },
 		{ TEXT("BP_SpellAnim_Rage"), EKeepersTerrainEffect::Rage },
+		{ TEXT("BP_SpellAnim_Charge"), EKeepersTerrainEffect::Dash },
+		{ TEXT("BP_SpellAnim_Boulder"), EKeepersTerrainEffect::Boulder },
 	};
 	static const FString CombatSystemClass = TEXT("BP_CombatSystem_C");
 
@@ -373,6 +375,14 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 	case EKeepersTerrainEffect::Throw:
 	case EKeepersTerrainEffect::Rage:
 		ApplyHeroAbility(Effect, Grid, Origin, Target);
+		break;
+	case EKeepersTerrainEffect::Boulder:
+		// The boulder stays where it fell when the cell was empty.
+		if (!KeepersTerrain::GetUnitOnTile(Grid, Target) && RaiseRock(Grid, Target, 1) && bHasLocation)
+		{
+			UKeepersJuiceSubsystem::Burst(GetWorld(), TargetLocation + FVector(0.f, 0.f, 20.f), AKeepersBurst::EKind::Puff, FLinearColor(0.62f, 0.55f, 0.45f), 16, 1.f);
+			UKeepersJuiceSubsystem::Sound(this, TEXT("Rock"));
+		}
 		break;
 	case EKeepersTerrainEffect::Sprout:
 		if (GrowForest(Grid, Target))

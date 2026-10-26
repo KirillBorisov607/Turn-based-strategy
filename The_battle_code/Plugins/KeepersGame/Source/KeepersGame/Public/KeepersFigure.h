@@ -17,7 +17,11 @@ enum class EKeepersAnimSet : uint8
 	Polearm,
 	Archer,
 	Crossbow,
-	Staff      // has cast animations
+	Staff,     // has cast animations
+	// Prebuilt meshes of their own skeletons (Body names the mesh, no head or weapons).
+	Cavalry,
+	Catapult,
+	Ram
 };
 
 /** What a figure is doing. */

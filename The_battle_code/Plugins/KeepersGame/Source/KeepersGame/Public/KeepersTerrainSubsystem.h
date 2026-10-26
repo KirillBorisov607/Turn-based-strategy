@@ -23,11 +23,14 @@ enum class EKeepersTerrainEffect : uint8
 	// The Barbarian.
 	Crush,
 	Throw,
-	Rage
+	Rage,
+	// Enemies.
+	Boulder
 };
 
 /**
- * Terrain and push effects of the Keepers' abilities.
+ * Terrain and push effects of the Keepers' abilities (and of the enemies': Charge works as Dash, RamStrike pushes,
+ * a catapult's Boulder stays on an empty target cell as a rock).
  *
  * Spells stay data driven: a spell's Animation class (in DT_SpellData) is a child of BP_SpellAnimation.
  * When BP_CombatSystem.CastSpell spawns one of the animations below, this subsystem waits until the

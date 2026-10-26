@@ -261,6 +261,9 @@ public:
 	/** Set by the quick battle "Наёмники кур": the next battle gets a band of mercenaries. */
 	bool bMercenaryQuickBattle = false;
 
+	/** Enemies (E_UnitType) who join the next battle, whatever it is (quick battles, tests). */
+	TArray<uint8> NextBand;
+
 	/** The next battle gets a band of mercenaries (for scripts and tests; the quick battle sets it too). */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Campaign", meta = (WorldContext = "WorldContextObject"))
 	static void SetMercenaryBattle(const UObject* WorldContextObject, bool bEnabled);

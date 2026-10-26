@@ -241,6 +241,32 @@ def rage(d):
     d.arc((104, 140, 152, 176), 200, 340, fill=DARK, width=7)
 
 
+def boulder(d):
+    # A rock flying in an arc.
+    d.arc((40, 60, 200, 220), 190, 300, fill=DARK, width=14)
+    d.arc((40, 60, 200, 220), 190, 300, fill=LIGHT, width=6)
+    outline_poly(d, [(138, 120), (184, 108), (214, 140), (204, 186), (160, 200), (124, 172)], fill=(170, 160, 150, 255))
+    d.line((160, 140, 178, 160), fill=DARK, width=5)
+
+
+def ram(d):
+    # A log with an iron head.
+    outline_poly(d, [(48, 112), (168, 112), (168, 152), (48, 152)], fill=(160, 106, 60, 255))
+    outline_poly(d, [(168, 100), (212, 112), (212, 152), (168, 164)], fill=(150, 156, 170, 255))
+    for x in (84, 124):
+        d.line((x, 112, x, 152), fill=DARK, width=6)
+
+
+def charge(d):
+    # A spear tip and speed lines.
+    for k, y in enumerate((96, 160)):
+        d.line((48 + k * 16, y, 120, y), fill=DARK, width=12)
+        d.line((48 + k * 16, y, 120, y), fill=LIGHT, width=6)
+    d.line((70, 128, 170, 128), fill=DARK, width=18)
+    d.line((70, 128, 170, 128), fill=(160, 106, 60, 255), width=10)
+    outline_poly(d, [(166, 104), (222, 128), (166, 152)], fill=(200, 206, 220, 255))
+
+
 ICONS = {
     # growth
     "Hp": ((196, 62, 56), heart),
@@ -277,6 +303,10 @@ ICONS = {
     "Crush": ((130, 90, 50), hammer),
     "Throw": ((176, 120, 40), throw_arc),
     "Rage": ((170, 30, 30), rage),
+    # enemies
+    "Boulder": ((110, 100, 92), boulder),
+    "RamStrike": ((120, 80, 50), ram),
+    "Charge": ((150, 40, 40), charge),
 }
 
 

@@ -72,6 +72,8 @@ namespace KeepersMenu
 		EKeepersObjectiveKind Objective = EKeepersObjectiveKind::None;
 		/** Ice or marsh patches on the field. */
 		EKeepersSurface Surface = EKeepersSurface::None;
+		/** Siege machines join the enemies. */
+		bool bSiege = false;
 	};
 
 	static const FQuickBattle QuickBattles[] =
@@ -82,6 +84,7 @@ namespace KeepersMenu
 		{ TEXT("L_Combat_SoSlimy"), TEXT("Осада"), TEXT("Продержитесь четыре хода. Слизни знают, что время на вашей стороне, и лезут напролом."), EKeepersObjectiveKind::Survive },
 		{ TEXT("L_Slice_Hex"), TEXT("Тотем кур"), TEXT("Куры поставили тотем: он лечит всех врагов рядом. Разрушьте его — и бой выигран."), EKeepersObjectiveKind::Totem },
 		{ TEXT("L_Combat_FairDuel"), TEXT("Гололёд"), TEXT("Поле во льду: кто закончит ход на льду, проскользит дальше. Иногда — прямо к врагу."), EKeepersObjectiveKind::None, EKeepersSurface::Ice },
+		{ TEXT("L_Combat_FairDuel"), TEXT("Осадные машины"), TEXT("Катапульта бросает валуны, которые остаются на поле скалами, таран сбивает с ног. Доберитесь до них первыми."), EKeepersObjectiveKind::None, EKeepersSurface::None, true },
 		{ TEXT("L_Slice_Hex"), TEXT("Солёная топь"), TEXT("Топь отнимает очко движения, а за два хода на одном месте затягивает. Не стойте в болоте."), EKeepersObjectiveKind::None, EKeepersSurface::Marsh },
 		{ TEXT("L_Combat_FairDuel"), TEXT("Честная дуэль"), TEXT("Три Хранителя против трёх таких же. Кто лучше использует местность?") },
 		{ TEXT("L_Combat_SoSlimy"), TEXT("Слишком скользко"), TEXT("Слизни оставляют лужи и делятся надвое. Не дайте им заполнить поле.") },
@@ -503,7 +506,8 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 			const bool bMercenaries = FCString::Strcmp(Battle.Name, TEXT("Наёмники кур")) == 0 || Battle.Objective == EKeepersObjectiveKind::Leader;
 			const EKeepersObjectiveKind Objective = Battle.Objective;
 			const EKeepersSurface Surface = Battle.Surface;
-			AddItem(Battle.Name, Battle.Description, [WeakThis, Level, bMercenaries, Objective, Surface]()
+			const bool bSiege = Battle.bSiege;
+			AddItem(Battle.Name, Battle.Description, [WeakThis, Level, bMercenaries, Objective, Surface, bSiege]()
 			{
 				if (WeakThis.IsValid())
 				{
@@ -512,6 +516,11 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 					if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get()))
 					{
 						Campaign->bMercenaryQuickBattle = bMercenaries;
+						Campaign->NextBand.Reset();
+						if (bSiege)
+						{
+							Campaign->NextBand = { 13, 14, 8 };
+						}
 					}
 					WeakThis->Leave([WeakThis, Level]() { if (WeakThis.IsValid()) { KeepersLoading::OpenLevel(WeakThis.Get(), Level); } });
 				}

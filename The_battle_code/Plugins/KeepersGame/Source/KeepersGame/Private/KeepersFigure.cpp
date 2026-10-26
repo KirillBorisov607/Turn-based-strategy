@@ -36,6 +36,45 @@ namespace KeepersFigure
 		default:                         OutFolder = TEXT("Infantry");  OutPrefix = TEXT("infantry"); break;
 		}
 	}
+
+	static bool IsPrebuilt(EKeepersAnimSet Set)
+	{
+		return Set == EKeepersAnimSet::Cavalry || Set == EKeepersAnimSet::Catapult || Set == EKeepersAnimSet::Ram;
+	}
+
+	/** Riders and machines: their own folders and shorter animation lists. */
+	static UAnimSequence* FindPrebuiltAnimation(EKeepersAnimSet Set, EKeepersPose Pose)
+	{
+		if (Set == EKeepersAnimSet::Cavalry)
+		{
+			const TCHAR* Suffix = TEXT("01_idle");
+			switch (Pose)
+			{
+			case EKeepersPose::Walk:   Suffix = TEXT("02_walk"); break;
+			case EKeepersPose::Run:    Suffix = TEXT("03_run"); break;
+			case EKeepersPose::Attack:
+			case EKeepersPose::Cast:   Suffix = TEXT("04_attack"); break;
+			case EKeepersPose::Hit:    Suffix = TEXT("05_take_damage"); break;
+			case EKeepersPose::Death:  Suffix = TEXT("06_death_A"); break;
+			default: break;
+			}
+			return Load<UAnimSequence>(TEXT("Animations/Cavalry/Cavalry"), FName(*FString::Printf(TEXT("Anim_cav_%s"), Suffix)));
+		}
+		const TCHAR* Machine = Set == EKeepersAnimSet::Catapult ? TEXT("catapult") : TEXT("ram");
+		const TCHAR* Suffix = TEXT("01_idle");
+		switch (Pose)
+		{
+		case EKeepersPose::Walk:
+		case EKeepersPose::Run:    Suffix = TEXT("02_move"); break;
+		case EKeepersPose::Attack:
+		case EKeepersPose::Cast:   Suffix = TEXT("03_attack"); break;
+		case EKeepersPose::Hit:    Suffix = TEXT("04_damage"); break;
+		case EKeepersPose::Death:  Suffix = TEXT("05_death"); break;
+		default: break;
+		}
+		return Load<UAnimSequence>(FString(TEXT("Animations/Units/")) + (Set == EKeepersAnimSet::Catapult ? TEXT("Catapult") : TEXT("Ram")),
+			FName(*FString::Printf(TEXT("Anim_%s_%s"), Machine, Suffix)));
+	}
 }
 
 UKeepersFigureComponent::UKeepersFigureComponent()
@@ -68,6 +107,10 @@ FText UKeepersFigureComponent::ColorName(FName InColor)
 
 UAnimSequence* UKeepersFigureComponent::FindAnimation(EKeepersAnimSet Set, EKeepersPose Pose)
 {
+	if (KeepersFigure::IsPrebuilt(Set))
+	{
+		return KeepersFigure::FindPrebuiltAnimation(Set, Pose);
+	}
 	FString Folder;
 	FString Prefix;
 	KeepersFigure::SetNames(Set, Folder, Prefix);
@@ -168,8 +211,11 @@ void UKeepersFigureComponent::Rebuild()
 	{
 		return;
 	}
-	Body->SetSkeletalMeshAsset(KeepersFigure::Load<USkeletalMesh>(TEXT("Meshes/Characters_Parts/Units"), Look.Body));
-	Head->SetSkeletalMeshAsset(KeepersFigure::Load<USkeletalMesh>(TEXT("Meshes/Characters_Parts/Units"), Look.Head));
+	const bool bPrebuilt = KeepersFigure::IsPrebuilt(Look.AnimSet);
+	const TCHAR* BodyFolder = !bPrebuilt ? TEXT("Meshes/Characters_Parts/Units")
+		: Look.AnimSet == EKeepersAnimSet::Cavalry ? TEXT("Meshes/Characters_Prebuilt/Cavalry") : TEXT("Meshes/Characters_Prebuilt/Machines");
+	Body->SetSkeletalMeshAsset(KeepersFigure::Load<USkeletalMesh>(BodyFolder, Look.Body));
+	Head->SetSkeletalMeshAsset(bPrebuilt ? nullptr : KeepersFigure::Load<USkeletalMesh>(TEXT("Meshes/Characters_Parts/Units"), Look.Head));
 	Head->SetLeaderPoseComponent(Body, true);
 
 	for (UStaticMeshComponent* Attachment : Attachments)

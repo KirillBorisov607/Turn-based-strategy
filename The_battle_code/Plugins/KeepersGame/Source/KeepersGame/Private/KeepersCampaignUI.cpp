@@ -802,22 +802,37 @@ void UKeepersCampaignWorldSubsystem::TickMercenaries()
 	constexpr uint8 Bandit = 6;
 	constexpr uint8 Archer = 7;
 	constexpr uint8 Brute = 8;
-	if (Campaign->bMercenaryQuickBattle)
+	constexpr uint8 Cavalry = 12;
+	constexpr uint8 Catapult = 13;
+	constexpr uint8 Ram = 14;
+	constexpr uint8 Shaman = 15;
+	if (Campaign->NextBand.Num() > 0)
+	{
+		Band = MoveTemp(Campaign->NextBand);
+		Campaign->NextBand.Reset();
+		bQuickMercenaries = !Campaign->IsInBattleNode();
+	}
+	else if (Campaign->bMercenaryQuickBattle)
 	{
 		Campaign->bMercenaryQuickBattle = false;
 		bQuickMercenaries = true;
-		Band = { Bandit, Bandit, Archer, Brute };
+		Band = { Bandit, Cavalry, Archer, Shaman };
 	}
 	else if (Campaign->IsInBattleNode())
 	{
+		// Riders are the elite, siege machines come with the boss, shamans join later battles.
 		const FKeepersMapNode& Node = Campaign->GetNodes()[Campaign->GetCurrentNode()];
 		if (Node.Type == EKeepersNodeType::Elite)
 		{
-			Band = { Bandit, Bandit, Archer };
+			Band = { Cavalry, Bandit, Archer };
 		}
 		else if (Node.Type == EKeepersNodeType::Boss)
 		{
-			Band = { Brute, Archer };
+			Band = { Brute, Catapult, Ram, Archer };
+		}
+		else if (Node.Column >= 3)
+		{
+			Band = { Bandit, Shaman, Archer };
 		}
 		else if (Node.Column >= 2)
 		{
