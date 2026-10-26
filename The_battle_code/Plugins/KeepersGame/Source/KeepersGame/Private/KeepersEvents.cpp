@@ -18,7 +18,11 @@ namespace KeepersEvents
 		Boots,
 		Glory,
 		Fight,
-		FightMercenaries
+		FightMercenaries,
+		/** Glory and one more peaceful choice towards the chickens. */
+		Peace,
+		/** The Rogue joins the roster. */
+		Rogue
 	};
 
 	struct FOption
@@ -50,7 +54,7 @@ namespace KeepersEvents
 			{ TEXT("Курица-беженка"),
 				TEXT("Из кустов выбегает растрёпанная курица с узелком. «Они всё знают! — кудахчет она. — Прячьте меня!»"),
 				{
-					{ TEXT("Приютить"), 0, 100, EEffect::Glory, 10, TEXT("Курица пересказала сплетни курятника. Теперь о Хранителях судачат по всей долине.") },
+					{ TEXT("Приютить"), 0, 100, EEffect::Peace, 10, TEXT("Курица пересказала сплетни курятника. Теперь о Хранителях судачат по всей долине.") },
 					{ TEXT("Обыскать узелок"), 0, 60, EEffect::Gold, 30, TEXT("В узелке — золотые зёрнышки. Курица обиделась, но промолчала."),
 						EEffect::FightMercenaries, 0, TEXT("Это ловушка! Из кустов выходят наёмники кур.") },
 					{ TEXT("Пройти мимо") , 0, 100, EEffect::None, 0, TEXT("Курица смотрит вам вслед с глубоким осуждением.") },
@@ -61,6 +65,7 @@ namespace KeepersEvents
 					{ TEXT("Выпить за удачу (15 зол.)"), 15, 100, EEffect::Artifact, 0, TEXT("К утру у Хранителей откуда-то взялась реликвия. Откуда — не помнит никто.") },
 					{ TEXT("Устроить драку"), 0, 100, EEffect::Fight, 0, TEXT("") },
 					{ TEXT("Послушать слухи"), 0, 100, EEffect::Glory, 6, TEXT("Говорят, Великий Петух боится сквозняков. И что слизни делятся, если их ударить. Это вы и так знали.") },
+					{ TEXT("Угостить незнакомца в углу (10 зол.)"), 10, 100, EEffect::Rogue, 0, TEXT("Незнакомец в капюшоне оказался Плутом. «Камень? Я его просто нёс. Случайно. Возьмите меня с собой — я знаю, где куры прячут остальное».") },
 				} },
 			{ TEXT("Говорящий камень"),
 				TEXT("Мшистый валун открывает один глаз: «Ну наконец-то. Триста лет никто не спрашивал дорогу»."),
@@ -103,7 +108,7 @@ namespace KeepersEvents
 			{ TEXT("Телега наёмников"),
 				TEXT("На обочине — сломанная телега с гербом курятника. Возницы спорят, кто виноват."),
 				{
-					{ TEXT("Помочь починить"), 0, 100, EEffect::Glory, 10, TEXT("Наёмники так удивились, что пообещали в следующий раз бить вполсилы. Наверное, врут.") },
+					{ TEXT("Помочь починить"), 0, 100, EEffect::Peace, 10, TEXT("Наёмники так удивились, что пообещали в следующий раз бить вполсилы. Наверное, врут.") },
 					{ TEXT("Обчистить телегу"), 0, 100, EEffect::FightMercenaries, 0, TEXT("") },
 					{ TEXT("Пройти мимо"), 0, 100, EEffect::None, 0, TEXT("Спор за спиной переходит в драку. Без вас.") },
 				} },
@@ -128,7 +133,7 @@ namespace KeepersEvents
 				{
 					{ TEXT("Обшарить карман"), 0, 50, EEffect::Artifact, 0, TEXT("Великан почесался, но не проснулся. В кармане — реликвия."),
 						EEffect::Fight, 0, TEXT("Великан открыл один глаз. Его друзья — оба."), },
-					{ TEXT("Освободить курицу"), 0, 100, EEffect::Glory, 8, TEXT("Курица унеслась с криком «Я вам это припомню!». Кажется, это благодарность.") },
+					{ TEXT("Освободить курицу"), 0, 100, EEffect::Peace, 8, TEXT("Курица унеслась с криком «Я вам это припомню!». Кажется, это благодарность.") },
 					{ TEXT("Обойти по полю"), 0, 100, EEffect::None, 0, TEXT("Крюк в полдня, зато без приключений.") },
 				} },
 			{ TEXT("Гадалка у дороги"),
@@ -150,7 +155,7 @@ namespace KeepersEvents
 			{ TEXT("Застава кур"),
 				TEXT("Шлагбаум, будка и курица в каске. «Предъявите пропуск или яйцо»."),
 				{
-					{ TEXT("Дать взятку (15 зол.)"), 15, 100, EEffect::None, 0, TEXT("Курица в каске козырнула крылом. Шлагбаум поднят.") },
+					{ TEXT("Дать взятку (15 зол.)"), 15, 100, EEffect::Peace, 0, TEXT("Курица в каске козырнула крылом. Шлагбаум поднят.") },
 					{ TEXT("Прорваться"), 0, 100, EEffect::FightMercenaries, 0, TEXT("") },
 					{ TEXT("Притвориться курами"), 0, 35, EEffect::Glory, 15, TEXT("Стражник ничего не заподозрил. Это было унизительно и прекрасно."),
 						EEffect::FightMercenaries, 0, TEXT("«Почему у вашей курицы меч?» Тревога!") },
@@ -256,6 +261,26 @@ namespace KeepersEvents
 				Party->AddGlory(Amount);
 			}
 			return Amount < 0 ? FString::Printf(TEXT("−%d славы"), -Amount) : FString::Printf(TEXT("+%d славы"), Amount);
+		case EEffect::Peace:
+		{
+			Campaign->AddPeace();
+			if (UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(Context))
+			{
+				Party->AddGlory(Amount);
+			}
+			const FString Glory = Amount > 0 ? FString::Printf(TEXT("+%d славы · "), Amount) : FString();
+			return Glory + FString::Printf(TEXT("мир с курами: %d"), Campaign->GetPeace());
+		}
+		case EEffect::Rogue:
+			if (UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(Context))
+			{
+				if (Party->UnlockHero(TEXT("Rogue")))
+				{
+					return TEXT("Плут открыт: возьмите его в отряд на экране «Отряд»");
+				}
+				Party->AddGlory(10);
+			}
+			return TEXT("Плут уже с вами: +10 славы");
 		default:
 			return FString();
 		}
@@ -299,6 +324,8 @@ void UKeepersCampaignMapWidget::ShowEvent(int32 NodeIndex)
 			{ EEffect::Glory, TEXT("Glory") },
 			{ EEffect::Fight, TEXT("Fight") },
 			{ EEffect::FightMercenaries, TEXT("Fight") },
+			{ EEffect::Peace, TEXT("Charm") },
+			{ EEffect::Rogue, TEXT("Backstab") },
 		};
 		// A gamble shows a die: the outcome is not known.
 		Option.Image = KeepersCards::Card(Choice.Chance < 100 ? TEXT("Chance") : Icons.FindRef(Choice.Effect));

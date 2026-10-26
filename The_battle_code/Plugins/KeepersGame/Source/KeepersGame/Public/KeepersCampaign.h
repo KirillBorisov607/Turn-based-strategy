@@ -178,6 +178,10 @@ public:
 	/** Region of the run (KeepersRegions), from 0. */
 	UPROPERTY(SaveGame)
 	int32 Region = 0;
+
+	/** Peaceful choices towards the chickens: three open the pact ending. */
+	UPROPERTY(SaveGame)
+	int32 Peace = 0;
 };
 
 /** What a hero learns on a level-up. */
@@ -325,6 +329,9 @@ public:
 	void TestSetRegion(int32 Region);
 	/** Test hook: enters a node whether it is open or not; -1 is the boss. */
 	void TestEnterNode(int32 NodeIndex);
+	int32 GetPeace() const { return Save ? Save->Peace : 0; }
+	void AddPeace();
+
 	/** The map shows the region's introduction once after a new region begins. */
 	bool bRegionIntroPending = false;
 

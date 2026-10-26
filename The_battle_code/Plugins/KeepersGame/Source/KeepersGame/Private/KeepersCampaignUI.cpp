@@ -28,6 +28,7 @@
 #include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
 #include "KeepersRegions.h"
+#include "KeepersStory.h"
 #include "KeepersPartyBattle.h"
 #include "KeepersCreatureSubsystem.h"
 #include "KeepersLevelKit.h"
@@ -733,6 +734,26 @@ void UKeepersCampaignWorldSubsystem::TestCamp(const UObject* WorldContextObject,
 	{
 		Self->ShowLevelUp();
 	}
+	else if (Action == TEXT("dialog"))
+	{
+		Self->ShowDialog(KeepersStory::RegionIntro(Index));
+	}
+	else if (Action == TEXT("finale"))
+	{
+		TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakSelf(Self);
+		Self->ShowDialog(KeepersStory::Finale(), [WeakSelf]() { if (WeakSelf.IsValid()) { WeakSelf->ShowEndings(); } });
+	}
+	else if (Action == TEXT("next"))
+	{
+		for (TObjectIterator<UKeepersDialogWidget> It; It; ++It)
+		{
+			if (It->GetWorld() == World && It->IsInViewport())
+			{
+				It->Advance();
+				break;
+			}
+		}
+	}
 	else if (Action == TEXT("close"))
 	{
 		for (TObjectIterator<UKeepersChoiceWidget> It; It; ++It)
@@ -1137,6 +1158,78 @@ void UKeepersCampaignWorldSubsystem::ApplyRegionRound(UObject* CombatSystem)
 	}
 }
 
+UKeepersDialogWidget* UKeepersCampaignWorldSubsystem::ShowDialog(TArray<FKeepersLine> Lines, TFunction<void()> OnFinished)
+{
+	APlayerController* Player = GetWorld()->GetFirstPlayerController();
+	UKeepersDialogWidget* Dialog = Player ? CreateWidget<UKeepersDialogWidget>(Player, UKeepersDialogWidget::StaticClass()) : nullptr;
+	if (Dialog)
+	{
+		Dialog->Setup(MoveTemp(Lines), MoveTemp(OnFinished));
+		Dialog->AddToViewport(60);
+		SetUiInput(Dialog);
+	}
+	return Dialog;
+}
+
+void UKeepersCampaignWorldSubsystem::ShowEndings()
+{
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	if (!Campaign)
+	{
+		return;
+	}
+	using KeepersStory::EEnding;
+	TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakThis(this);
+	TWeakObjectPtr<UKeepersCampaignSubsystem> WeakCampaign(Campaign);
+	struct FEndingCard
+	{
+		EEnding Ending;
+		const TCHAR* Description;
+		const TCHAR* Icon;
+		FLinearColor Color;
+	};
+	static const FEndingCard Cards[] =
+	{
+		{ EEnding::Return, TEXT("Камни вернутся в святилище, земли успокоятся. Так велит долг Хранителей."), TEXT("Leaf"), FLinearColor(0.2f, 0.4f, 0.3f) },
+		{ EEnding::Keep, TEXT("Власть над землями — в ваших руках. Что может пойти не так?"), TEXT("Relic"), FLinearColor(0.35f, 0.12f, 0.3f) },
+		{ EEnding::Pact, TEXT("Поделить камни с курами и жить в мире."), TEXT("Charm"), FLinearColor(0.5f, 0.38f, 0.12f) },
+	};
+	TArray<UKeepersChoiceWidget::FOption> Options;
+	for (const FEndingCard& Card : Cards)
+	{
+		const bool bOpen = Card.Ending != EEnding::Pact || Campaign->GetPeace() >= KeepersStory::PeaceNeeded;
+		UKeepersChoiceWidget::FOption Option;
+		Option.Title = KeepersStory::EndingName(Card.Ending);
+		Option.Description = FText::FromString(bOpen ? FString(Card.Description)
+			: FString::Printf(TEXT("Куры вам не верят: нужно %d мирных решения, а было %d."), KeepersStory::PeaceNeeded, Campaign->GetPeace()));
+		Option.Color = bOpen ? Card.Color : FLinearColor(0.18f, 0.18f, 0.2f);
+		Option.Image = KeepersCards::Card(Card.Icon);
+		const EEnding Ending = Card.Ending;
+		Option.OnPicked = [WeakThis, WeakCampaign, Ending, bOpen]()
+		{
+			if (!WeakThis.IsValid())
+			{
+				return;
+			}
+			if (!bOpen)
+			{
+				WeakThis->ShowEndings();
+				return;
+			}
+			UE_LOG(LogKeepersCampaignUI, Log, TEXT("Ending: %s"), *KeepersStory::EndingName(Ending).ToString());
+			WeakThis->ShowDialog(KeepersStory::Ending(Ending), [WeakCampaign]()
+			{
+				if (WeakCampaign.IsValid())
+				{
+					WeakCampaign->CompleteCurrentNode();
+				}
+			});
+		};
+		Options.Add(MoveTemp(Option));
+	}
+	ShowChoice(FText::FromString(TEXT("Камни земель")), FText::FromString(TEXT("Шесть камней в руках Хранителей. Как с ними поступить?")), MoveTemp(Options));
+}
+
 void UKeepersCampaignWorldSubsystem::ShowMap()
 {
 	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
@@ -1155,6 +1248,19 @@ void UKeepersCampaignWorldSubsystem::ShowMap()
 	Screen = CreateWidget<UKeepersCampaignMapWidget>(Player, UKeepersCampaignMapWidget::StaticClass());
 	Screen->AddToViewport(10);
 	SetUiInput(Screen);
+	// A new region begins with its scene.
+	if (Campaign->bRegionIntroPending)
+	{
+		Campaign->bRegionIntroPending = false;
+		TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakThis(this);
+		ShowDialog(KeepersStory::RegionIntro(Campaign->GetRegion()), [WeakThis]()
+		{
+			if (WeakThis.IsValid() && WeakThis->Screen)
+			{
+				WeakThis->SetUiInput(WeakThis->Screen);
+			}
+		});
+	}
 }
 
 void UKeepersCampaignWorldSubsystem::TickBattle()
@@ -1640,6 +1746,13 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 	{
 		const FKeepersRegion& Region = Campaign->GetRegionDef();
 		const bool bFinal = Campaign->IsFinalRegion();
+		// The last boss: the finale and the choice of the ending.
+		if (bFinal)
+		{
+			TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakThis(this);
+			ShowDialog(KeepersStory::Finale(), [WeakThis]() { if (WeakThis.IsValid()) { WeakThis->ShowEndings(); } });
+			return;
+		}
 		UKeepersChoiceWidget::FOption Done;
 		Done.Title = FText::FromString(bFinal ? FString(TEXT("В главное меню"))
 			: FString::Printf(TEXT("В путь: %s"), *KeepersRegions::Get(Campaign->GetRegion() + 1).Name.ToString()));

@@ -154,6 +154,11 @@ public:
 	/** The camp node: smith, merchant, rest. */
 	void ShowCamp();
 
+	/** A scene of the story; OnFinished runs when it closes. */
+	class UKeepersDialogWidget* ShowDialog(TArray<struct FKeepersLine> Lines, TFunction<void()> OnFinished = nullptr);
+	/** After the last boss: the choice of the ending. */
+	void ShowEndings();
+
 	/**
 	 * Test hook: "open" the camp, "armor" / "boots" for squad member Index, "buy" offer Index, "leave";
 	 * "pick" — node Index on the map, as a click; "event" — the encounter of node Index; "choose" — option Index of the open choice panel.

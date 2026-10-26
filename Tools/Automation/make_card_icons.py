@@ -267,6 +267,25 @@ def charge(d):
     outline_poly(d, [(166, 104), (222, 128), (166, 152)], fill=(200, 206, 220, 255))
 
 
+def rooster(d):
+    # A rooster's head: comb, eye, beak, wattle.
+    for x, y, r in ((104, 66, 20), (130, 56, 22), (156, 66, 20)):
+        d.ellipse((x - r - 5, y - r - 5, x + r + 5, y + r + 5), fill=DARK)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=(230, 50, 40, 255))
+    d.ellipse((80, 70, 186, 196), fill=DARK)
+    d.ellipse((86, 76, 180, 190), fill=LIGHT)
+    outline_poly(d, [(176, 118), (222, 132), (176, 148)], fill=(240, 170, 40, 255), width=5)
+    d.ellipse((140, 104, 160, 124), fill=DARK)
+    outline_poly(d, [(160, 150), (178, 152), (172, 196), (156, 186)], fill=(230, 50, 40, 255), width=5)
+
+
+def witch(d):
+    # A pointed hat with a buckle.
+    outline_poly(d, [(128, 40), (176, 170), (80, 170)], fill=(70, 50, 100, 255))
+    outline_poly(d, [(48, 168), (208, 168), (208, 188), (48, 188)], fill=(70, 50, 100, 255))
+    outline_poly(d, [(112, 146), (144, 146), (144, 168), (112, 168)], fill=(236, 196, 108, 255), width=5)
+
+
 ICONS = {
     # growth
     "Hp": ((196, 62, 56), heart),
@@ -307,6 +326,9 @@ ICONS = {
     "Boulder": ((110, 100, 92), boulder),
     "RamStrike": ((120, 80, 50), ram),
     "Charge": ((150, 40, 40), charge),
+    # story
+    "Rooster": ((200, 150, 60), rooster),
+    "Witch": ((110, 150, 90), witch),
 }
 
 

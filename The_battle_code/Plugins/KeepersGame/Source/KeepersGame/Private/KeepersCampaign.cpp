@@ -94,6 +94,7 @@ void UKeepersCampaignSubsystem::StartNewCampaign()
 	Save = NewObject<UKeepersCampaignSave>(this);
 	GenerateMap(FMath::Rand());
 	bActive = true;
+	bRegionIntroPending = true;
 	WriteSave();
 	UE_LOG(LogKeepersCampaign, Log, TEXT("New campaign, %d nodes"), Save->Nodes.Num());
 	OpenLevel(MapLevel);
@@ -624,6 +625,16 @@ const FKeepersBattleSnapshot* UKeepersCampaignSubsystem::GetBattleToResume() con
 const FKeepersRegion& UKeepersCampaignSubsystem::GetRegionDef() const
 {
 	return KeepersRegions::Get(GetRegion());
+}
+
+void UKeepersCampaignSubsystem::AddPeace()
+{
+	if (Save)
+	{
+		++Save->Peace;
+		WriteSave();
+		UE_LOG(LogKeepersCampaign, Log, TEXT("Peace with the chickens: %d"), Save->Peace);
+	}
 }
 
 bool UKeepersCampaignSubsystem::IsFinalRegion() const
