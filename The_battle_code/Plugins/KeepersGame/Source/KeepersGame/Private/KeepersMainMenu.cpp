@@ -38,6 +38,7 @@
 #include "KeepersCampaign.h"
 #include "KeepersBattleScenery.h"
 #include "KeepersHeroes.h"
+#include "Components/ScrollBox.h"
 #include "KeepersLoadingScreen.h"
 #include "KeepersBattleObjective.h"
 #include "KeepersLevelKit.h"
@@ -329,7 +330,15 @@ TSharedRef<SWidget> UKeepersMainMenuWidget::RebuildWidget()
 		PageTitle = KeepersStyle::MakeText(WidgetTree, FText::GetEmpty(), KeepersStyle::Heading(20), KeepersStyle::TextDim);
 		Column->AddChildToVerticalBox(PageTitle)->SetPadding(FMargin(21.f, 0.f, 0.f, 10.f));
 		List = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Column->AddChildToVerticalBox(List);
+		// Long pages (quick battles with the author's levels) scroll instead of running off the screen.
+		UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
+		Scroll->SetScrollBarVisibility(ESlateVisibility::Visible);
+		Scroll->SetAlwaysShowScrollbar(false);
+		Scroll->AddChild(List);
+		USizeBox* ListSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		ListSize->SetMaxDesiredHeight(620.f);
+		ListSize->AddChild(Scroll);
+		Column->AddChildToVerticalBox(ListSize);
 		Place(Column, FAnchors(0.f, 0.f), FMargin(80.f, 270.f, 0.f, 0.f), FVector2D::ZeroVector, true);
 
 		// Description of the hovered item.
