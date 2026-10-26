@@ -65,9 +65,13 @@ def note(name):
     return 440.0 * 2 ** ((names[pitch] + (octave - 4) * 12) / 12)
 
 
-def main(out, seconds):
+def main(out, seconds, loop=False):
+    """loop: whole bars, no intro and no fades, so the end joins the start (battle music)."""
+    if loop:
+        seconds = round(seconds / (4 * BEAT)) * 4 * BEAT
     n = int(seconds * RATE)
-    drums, bass, lute, lead = (np.zeros(n) for _ in range(4))
+    tail = int(0.8 * RATE)
+    drums, bass, lute, lead = (np.zeros(n + tail) for _ in range(4))
     # D minor heroic progression: Dm - Bb - F - C, two bars each chord... one bar each.
     chords = [("D3", ["D4", "F4", "A4", "D5"]), ("A#2", ["A#3", "D4", "F4", "A#4"]),
               ("F2", ["F3", "A3", "C4", "F4"]), ("C3", ["C4", "E4", "G4", "C5"])]
@@ -77,7 +81,7 @@ def main(out, seconds):
     for b in range(bars):
         root, arp = chords[b % 4]
         t0 = b * bar
-        intro = b < 2
+        intro = b < 2 and not loop
         # Drums: kick on 1 and 3 (and the "and" of 4), snare on 2 and 4, eighth hats.
         if not intro:
             for k in (0, 2, 3.5):
@@ -95,18 +99,24 @@ def main(out, seconds):
             f = note(arp[[0, 1, 2, 3, 2, 1, 2, 3][k % 8]])
             place(lute, pluck(f, 0.5), t0 + k * BEAT / 4, 0.32)
         # Melody from the third bar: two notes per beat pair.
-        if b >= 2:
+        if b >= 2 or loop:
             for k in range(4):
                 f = note(melody[((b - 2) * 4 + k) % len(melody)])
                 s = pluck(f, BEAT * 1.2) * 0.6 + sine(f, BEAT * 1.2, 0.5) * 0.4
                 place(lead, s, t0 + k * BEAT, 0.5)
     mix_l = drums * 0.9 + bass + lute * 0.8 + lead * 0.9
     mix_r = drums * 0.9 + bass + lute * 1.0 + lead * 0.7
+    if loop:
+        # The tails of the last notes wrap round to the start, so the loop joins without a click.
+        mix_l[:tail] += mix_l[n:]
+        mix_r[:tail] += mix_r[n:]
+    mix_l, mix_r = mix_l[:n], mix_r[:n]
     # Fade in, fade out.
     fade = np.ones(n)
-    fi, fo = int(0.5 * RATE), int(2.5 * RATE)
-    fade[:fi] = np.linspace(0, 1, fi)
-    fade[-fo:] = np.linspace(1, 0, fo)
+    if not loop:
+        fi, fo = int(0.5 * RATE), int(2.5 * RATE)
+        fade[:fi] = np.linspace(0, 1, fi)
+        fade[-fo:] = np.linspace(1, 0, fo)
     stereo = np.stack([mix_l * fade, mix_r * fade], axis=1)
     stereo /= np.max(np.abs(stereo)) or 1
     data = (stereo * 0.85 * 32767).astype(np.int16)
@@ -119,4 +129,5 @@ def main(out, seconds):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else r"C:/ProjectsUE/_logs/rec/theme.wav", float(sys.argv[2]) if len(sys.argv) > 2 else 48.0)
+    main(sys.argv[1] if len(sys.argv) > 1 else r"C:/ProjectsUE/_logs/rec/theme.wav", float(sys.argv[2]) if len(sys.argv) > 2 else 48.0,
+         "--loop" in sys.argv)

@@ -5,6 +5,7 @@
 #include "KeepersJuice.generated.h"
 
 class UStaticMeshComponent;
+class UAudioComponent;
 
 /** A short burst of little low-poly pieces: sparks of a hit, a heal, a puff of a fallen unit. */
 UCLASS(NotPlaceable, Transient)
@@ -47,6 +48,7 @@ private:
 /**
  * Makes the fight read at a glance: watches every unit's health and answers each change on the field —
  * sparks in the colour of the one hit, green motes of a heal, a puff when a unit falls.
+ * Plays the battle music while the fight is on.
  */
 UCLASS()
 class KEEPERSGAME_API UKeepersJuiceSubsystem : public UTickableWorldSubsystem
@@ -65,6 +67,11 @@ public:
 	static void Burst(UWorld* World, const FVector& Location, AKeepersBurst::EKind Kind, const FLinearColor& Color, int32 Count, float Size = 1.f);
 
 private:
+	void UpdateMusic();
+
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> Music;
+	bool bMusicFading = false;
 	TMap<TWeakObjectPtr<AActor>, int32> Health;
 	float Scan = 0.f;
 };

@@ -1,5 +1,6 @@
 #include "KeepersJuice.h"
 
+#include "Components/AudioComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Engine/StaticMesh.h"
@@ -161,10 +162,48 @@ void UKeepersJuiceSubsystem::Burst(UWorld* World, const FVector& Location, AKeep
 	}
 }
 
+void UKeepersJuiceSubsystem::UpdateMusic()
+{
+	UObject* Combat = nullptr;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (It->GetClass()->GetName() == TEXT("BP_CombatSystem_C"))
+		{
+			Combat = *It;
+			break;
+		}
+	}
+	bool bInCombat = false;
+	bool bFinishing = false;
+	if (Combat)
+	{
+		KeepersReflection::GetBool(Combat->GetClass(), Combat, TEXT("IsInCombat"), bInCombat);
+		KeepersReflection::GetBool(Combat->GetClass(), Combat, TEXT("IsFinishingCombat"), bFinishing);
+	}
+	if (bInCombat && !bFinishing && !Music)
+	{
+		// The battle theme (looped, Music volume of the settings), faded in.
+		if (USoundBase* Theme = LoadObject<USoundBase>(nullptr, TEXT("/Game/Keepers/Audio/Music/MUS_Battle.MUS_Battle"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			Music = UGameplayStatics::SpawnSound2D(this, Theme, 0.4f, 1.f, 0.f, nullptr, false, false);
+			if (Music)
+			{
+				Music->FadeIn(2.5f, 0.4f);
+			}
+		}
+	}
+	if (Music && bFinishing && !bMusicFading)
+	{
+		bMusicFading = true;
+		Music->FadeOut(2.f, 0.f);
+	}
+}
+
 void UKeepersJuiceSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	UWorld* World = GetWorld();
+	UpdateMusic();
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		AActor* Unit = *It;
