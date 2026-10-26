@@ -19,7 +19,9 @@ enum class EKeepersObjectiveKind : uint8
 	/** Defeat the enemies' leader. */
 	Leader,
 	/** Hold out for a few rounds. */
-	Survive
+	Survive,
+	/** Destroy the chickens' totem: it does not move, it heals the enemies around it. */
+	Totem
 };
 
 /** Top-of-screen panel: objective title and progress. Built in C++, no widget asset needed. */
@@ -93,6 +95,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Objective")
 	TObjectPtr<AActor> Leader;
 
+	/** With bDefeatLeader: the leader is a totem (empty Leader — the enemy furthest from the heroes). It stands still,
+	 *  does not act and heals the enemies around it at the start of each of their turns. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Objective")
+	bool bTotem = false;
+
 	/** The objective of the level, if any (cached per frame). */
 	static AKeepersBattleObjective* Find(const UWorld* World);
 	/** The next battle level without an objective of its own gets this one. */
@@ -119,6 +126,10 @@ private:
 	void Finish(bool bHeroesWin);
 	/** When combat starts: the beacon cell and its marker, the leader and its crown. */
 	void SetUp();
+	/** The leader becomes the totem: still, tough, hidden under a carved chicken pole. */
+	void MakeTotem();
+	/** The enemies' turn begins: the totem heals those around it. */
+	void TotemHeals();
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> Beacon;
@@ -128,6 +139,11 @@ private:
 	TObjectPtr<UStaticMeshComponent> Crown;
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> BeaconGem;
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> TotemParts;
+	UPROPERTY()
+	TObjectPtr<UPointLightComponent> TotemLight;
+	bool bTotemFallen = false;
 	bool bSetUp = false;
 	FString LeaderName;
 

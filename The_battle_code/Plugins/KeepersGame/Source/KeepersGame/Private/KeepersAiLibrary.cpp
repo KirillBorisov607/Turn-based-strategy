@@ -4,6 +4,7 @@
 #include "KeepersBattleObjective.h"
 #include "KeepersIntentSubsystem.h"
 #include "KeepersReflection.h"
+#include "KeepersSurfaces.h"
 
 namespace KeepersAi
 {
@@ -141,6 +142,15 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, uint8 Spell, FIntPoint 
 	if (bRush)
 	{
 		Bonus += 1.0;
+	}
+
+	// Marsh slows and pulls: a poor place to stand.
+	if (const UKeepersSurfaceSubsystem* Surfaces = UKeepersSurfaceSubsystem::Get(Unit))
+	{
+		if (Surfaces->GetSurface(Origin) == EKeepersSurface::Marsh && !CanFly(Unit))
+		{
+			Bonus -= 1.5;
+		}
 	}
 
 	// 1. Edges: water, pits and drops next to the spot — a gust or a shield bash ends a walker there.

@@ -10,6 +10,7 @@
 #include "KeepersPlantActor.h"
 #include "KeepersRockActor.h"
 #include "KeepersSmokeActor.h"
+#include "KeepersSurfaces.h"
 #include "Algo/Find.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMeshActor.h"
@@ -213,6 +214,36 @@ namespace KeepersTerrain
 		}
 		return nullptr;
 	}
+}
+
+UObject* UKeepersTerrainSubsystem::UnitOnTile(UObject* Grid, const FIntPoint& Index)
+{
+	return KeepersTerrain::GetUnitOnTile(Grid, Index);
+}
+
+bool UKeepersTerrainSubsystem::TileType(UObject* Grid, const FIntPoint& Index, uint8& OutType)
+{
+	return KeepersTerrain::GetTileType(Grid, Index, OutType);
+}
+
+bool UKeepersTerrainSubsystem::TileLocation(UObject* Grid, const FIntPoint& Index, FVector& OutLocation)
+{
+	return KeepersTerrain::GetTileLocation(Grid, Index, OutLocation);
+}
+
+TOptional<FIntPoint> UKeepersTerrainSubsystem::NextAlong(UObject* Grid, const FIntPoint& Index, const FVector& Direction)
+{
+	return KeepersTerrain::NeighbourAlong(Grid, Index, Direction.GetSafeNormal2D());
+}
+
+bool UKeepersTerrainSubsystem::CanUnitStandOn(UObject* Unit, uint8 Type)
+{
+	return Unit && KeepersTerrain::CanStandOn(Unit, Type);
+}
+
+UObject* UKeepersTerrainSubsystem::CombatSystemOf(UWorld* World)
+{
+	return KeepersTerrain::FindCombatSystem(World);
 }
 
 void UKeepersTerrainSubsystem::OnWorldBeginPlay(UWorld& InWorld)
@@ -682,6 +713,11 @@ void UKeepersTerrainSubsystem::ApplyHeroAbility(EKeepersTerrainEffect Effect, UO
 				TerrainProps.Add(Ice);
 			}
 			UKeepersJuiceSubsystem::Burst(World, Tile.GetLocation() + FVector(0.f, 0.f, 20.f), AKeepersBurst::EKind::Hit, FLinearColor(0.8f, 0.95f, 1.f), 14);
+			// Frozen water is ice: who stops on it slides.
+			if (UKeepersSurfaceSubsystem* Surfaces = UKeepersSurfaceSubsystem::Get(this))
+			{
+				Surfaces->Paint(Index, EKeepersSurface::Ice, false);
+			}
 			UE_LOG(LogKeepersTerrain, Log, TEXT("IcePath freezes (%d,%d)"), Index.X, Index.Y);
 		}
 		UKeepersJuiceSubsystem::Sound(this, TEXT("Splash"), 0.6f);

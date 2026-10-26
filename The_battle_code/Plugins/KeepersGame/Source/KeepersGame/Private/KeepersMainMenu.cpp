@@ -49,6 +49,7 @@
 #include "KeepersSettingsUI.h"
 #include "KeepersSquad.h"
 #include "KeepersStyle.h"
+#include "KeepersSurfaces.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "KeepersTutorial.h"
@@ -60,7 +61,7 @@
 
 namespace KeepersMenu
 {
-	static const TCHAR* Version = TEXT("Хранители земель · альфа 0.6");
+	static const TCHAR* Version = TEXT("Хранители земель · альфа 0.7");
 
 	struct FQuickBattle
 	{
@@ -69,6 +70,8 @@ namespace KeepersMenu
 		const TCHAR* Description;
 		/** The objective the battle gets (the level's own objective wins). */
 		EKeepersObjectiveKind Objective = EKeepersObjectiveKind::None;
+		/** Ice or marsh patches on the field. */
+		EKeepersSurface Surface = EKeepersSurface::None;
 	};
 
 	static const FQuickBattle QuickBattles[] =
@@ -77,6 +80,9 @@ namespace KeepersMenu
 		{ TEXT("L_Combat_FairDuel"), TEXT("Прорыв к маяку"), TEXT("Доведите хотя бы одного героя до маяка на той стороне. Враги будут его стеречь."), EKeepersObjectiveKind::Reach },
 		{ TEXT("L_Slice_Hex"), TEXT("Охота на вожака"), TEXT("Наёмники кур с вожаком во главе. Свалите вожака — остальные разбегутся. Он держится позади."), EKeepersObjectiveKind::Leader },
 		{ TEXT("L_Combat_SoSlimy"), TEXT("Осада"), TEXT("Продержитесь четыре хода. Слизни знают, что время на вашей стороне, и лезут напролом."), EKeepersObjectiveKind::Survive },
+		{ TEXT("L_Slice_Hex"), TEXT("Тотем кур"), TEXT("Куры поставили тотем: он лечит всех врагов рядом. Разрушьте его — и бой выигран."), EKeepersObjectiveKind::Totem },
+		{ TEXT("L_Combat_FairDuel"), TEXT("Гололёд"), TEXT("Поле во льду: кто закончит ход на льду, проскользит дальше. Иногда — прямо к врагу."), EKeepersObjectiveKind::None, EKeepersSurface::Ice },
+		{ TEXT("L_Slice_Hex"), TEXT("Солёная топь"), TEXT("Топь отнимает очко движения, а за два хода на одном месте затягивает. Не стойте в болоте."), EKeepersObjectiveKind::None, EKeepersSurface::Marsh },
 		{ TEXT("L_Combat_FairDuel"), TEXT("Честная дуэль"), TEXT("Три Хранителя против трёх таких же. Кто лучше использует местность?") },
 		{ TEXT("L_Combat_SoSlimy"), TEXT("Слишком скользко"), TEXT("Слизни оставляют лужи и делятся надвое. Не дайте им заполнить поле.") },
 		{ TEXT("L_Combat_ChickenHunt"), TEXT("Охота на кур"), TEXT("Куры зовут подмогу каждые два хода. Действуйте быстро.") },
@@ -496,11 +502,13 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 			const FName Level(Battle.Level);
 			const bool bMercenaries = FCString::Strcmp(Battle.Name, TEXT("Наёмники кур")) == 0 || Battle.Objective == EKeepersObjectiveKind::Leader;
 			const EKeepersObjectiveKind Objective = Battle.Objective;
-			AddItem(Battle.Name, Battle.Description, [WeakThis, Level, bMercenaries, Objective]()
+			const EKeepersSurface Surface = Battle.Surface;
+			AddItem(Battle.Name, Battle.Description, [WeakThis, Level, bMercenaries, Objective, Surface]()
 			{
 				if (WeakThis.IsValid())
 				{
 					AKeepersBattleObjective::RequestForNextBattle(Objective);
+					UKeepersSurfaceSubsystem::RequestForNextBattle(Surface);
 					if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get()))
 					{
 						Campaign->bMercenaryQuickBattle = bMercenaries;

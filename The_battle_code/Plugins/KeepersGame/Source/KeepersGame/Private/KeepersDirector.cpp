@@ -18,6 +18,7 @@
 #include "KeepersLoadingScreen.h"
 #include "KeepersMainMenu.h"
 #include "KeepersReflection.h"
+#include "KeepersSurfaces.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -113,7 +114,14 @@ void UKeepersDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	if (FParse::Value(CommandLine, TEXT("-KeepersObjective="), Goal))
 	{
 		AKeepersBattleObjective::RequestForNextBattle(Goal == TEXT("reach") ? EKeepersObjectiveKind::Reach
-			: Goal == TEXT("leader") ? EKeepersObjectiveKind::Leader : Goal == TEXT("survive") ? EKeepersObjectiveKind::Survive : EKeepersObjectiveKind::None);
+			: Goal == TEXT("leader") ? EKeepersObjectiveKind::Leader : Goal == TEXT("survive") ? EKeepersObjectiveKind::Survive
+			: Goal == TEXT("totem") ? EKeepersObjectiveKind::Totem : EKeepersObjectiveKind::None);
+	}
+	// Ice or marsh patches in the first battle: -KeepersSurface=ice|marsh.
+	FString Surface;
+	if (FParse::Value(CommandLine, TEXT("-KeepersSurface="), Surface))
+	{
+		UKeepersSurfaceSubsystem::RequestForNextBattle(Surface == TEXT("ice") ? EKeepersSurface::Ice : Surface == TEXT("marsh") ? EKeepersSurface::Marsh : EKeepersSurface::None);
 		if (Goal == TEXT("leader"))
 		{
 			if (UKeepersCampaignSubsystem* Campaign = Collection.InitializeDependency<UKeepersCampaignSubsystem>())
@@ -256,6 +264,21 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 			Shot->SetActorLocationAndRotation(FVector(FCString::Atof(*Args[0]), FCString::Atof(*Args[1]), FCString::Atof(*Args[2])),
 				FRotator(FCString::Atof(*Args[3]), FCString::Atof(*Args[4]), 0.f));
 			Shot->GetCameraComponent()->SetFieldOfView(FCString::Atof(*Args[5]));
+		}
+	}
+	else if (Step.Action == TEXT("focusleader"))
+	{
+		// A still shot of the objective's leader or totem.
+		const AKeepersBattleObjective* Objective = AKeepersBattleObjective::Find(World);
+		const AActor* Leader = Objective ? Objective->GetLeader() : nullptr;
+		ACameraActor* Shot = Leader ? GetCamera(World) : nullptr;
+		if (Shot)
+		{
+			CameraMode = ECameraMode::Still;
+			const FVector Target = Leader->GetActorLocation() + FVector(0.f, 0.f, 60.f);
+			const FVector Eye = Target + FVector(-520.f, -260.f, 330.f);
+			Shot->SetActorLocationAndRotation(Eye, (Target - Eye).Rotation());
+			Shot->GetCameraComponent()->SetFieldOfView(55.f);
 		}
 	}
 	else if (Step.Action == TEXT("squad") && Menu)

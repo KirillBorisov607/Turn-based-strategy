@@ -75,6 +75,18 @@ public:
 	/** Sets a tile's E_TileType through BP_Grid.AddGridTile; returns the tile transform. */
 	static bool SetTileType(UObject* Grid, const FIntPoint& Index, uint8 Type, FTransform& OutTransform);
 
+	/** BP_Grid and BP_Unit helpers for the other battle systems. */
+	static UObject* UnitOnTile(UObject* Grid, const FIntPoint& Index);
+	static bool TileType(UObject* Grid, const FIntPoint& Index, uint8& OutType);
+	static bool TileLocation(UObject* Grid, const FIntPoint& Index, FVector& OutLocation);
+	/** The neighbour of Index furthest along Direction. */
+	static TOptional<FIntPoint> NextAlong(UObject* Grid, const FIntPoint& Index, const FVector& Direction);
+	static bool CanUnitStandOn(UObject* Unit, uint8 Type);
+	static UObject* CombatSystemOf(UWorld* World);
+
+	/** Damages a unit and lets the combat system process its death. */
+	static void DamageUnit(UObject* CombatSystem, UObject* Unit, int32 Amount);
+
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
@@ -84,9 +96,6 @@ private:
 
 	UFUNCTION()
 	void OnTerrainAnimationDestroyed(AActor* Animation);
-
-	/** Damages a unit and lets the combat system process its death. */
-	static void DamageUnit(UObject* CombatSystem, UObject* Unit, int32 Amount);
 
 	/** Moves a unit by force to Destination (none: the edge): bumps, falls into water, or lands. */
 	bool ForcedMove(UObject* CombatSystem, UObject* Grid, UObject* Unit, const TOptional<FIntPoint>& Destination, int32 ExtraDamage);
