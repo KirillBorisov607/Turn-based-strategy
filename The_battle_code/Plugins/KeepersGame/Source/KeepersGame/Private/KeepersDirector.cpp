@@ -332,6 +332,12 @@ void UKeepersDirectorSubsystem::UpdateCamera(UWorld* World, float DeltaTime)
 	const TArray<AActor*> Units = KeepersDirector::UnitsInCombat(Combat);
 	if (Units.Num() == 0)
 	{
+		// The fight is over: back to the game's own camera.
+		CameraMode = ECameraMode::Game;
+		if (APlayerController* Player = World->GetFirstPlayerController())
+		{
+			Player->SetViewTarget(Player->GetPawn());
+		}
 		return;
 	}
 	FVector Center = FVector::ZeroVector;

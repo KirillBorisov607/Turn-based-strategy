@@ -59,7 +59,7 @@
 
 namespace KeepersMenu
 {
-	static const TCHAR* Version = TEXT("Хранители земель · сборка 0.5");
+	static const TCHAR* Version = TEXT("Хранители земель · альфа 0.6");
 
 	struct FQuickBattle
 	{
