@@ -249,6 +249,15 @@ void UKeepersBattleHudSubsystem::TestAbility(const UObject* WorldContextObject, 
 	}
 }
 
+void UKeepersBattleHudSubsystem::RestoreRound(int32 InRound)
+{
+	Round = InRound;
+	if (Phase)
+	{
+		Phase->ShowPhase(Round, true);
+	}
+}
+
 FText UKeepersBattleHudSubsystem::LocalUnitName(const FString& EnglishName)
 {
 	static const TMap<FString, FString> Names =

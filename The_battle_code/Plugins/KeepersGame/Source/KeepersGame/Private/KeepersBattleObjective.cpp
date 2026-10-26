@@ -651,6 +651,13 @@ void AKeepersBattleObjective::Tick(float DeltaSeconds)
 	}
 }
 
+void AKeepersBattleObjective::RestoreRound(int32 InRound)
+{
+	Round = InRound;
+	LastTeam = 0;
+	UpdateWidget();
+}
+
 void AKeepersBattleObjective::UpdateWidget()
 {
 	if (!Widget)

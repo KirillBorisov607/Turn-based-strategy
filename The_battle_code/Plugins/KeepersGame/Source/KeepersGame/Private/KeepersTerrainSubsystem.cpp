@@ -457,6 +457,7 @@ bool UKeepersTerrainSubsystem::RaiseRock(UObject* Grid, FIntPoint Index, int32 L
 		Rock->Rise(TileTransform.GetLocation(), TileTransform.GetLocation().Z + TileSize.Z * Levels);
 		TerrainProps.Add(Rock);
 	}
+	RockTiles.Add(Index);
 
 	UE_LOG(LogKeepersTerrain, Log, TEXT("RaiseRock at (%d,%d)"), Index.X, Index.Y);
 	return true;
@@ -626,6 +627,40 @@ void UKeepersTerrainSubsystem::DamageUnit(UObject* CombatSystem, UObject* Unit, 
 	}
 }
 
+bool UKeepersTerrainSubsystem::FreezeWater(UObject* Grid, const FIntPoint& Index)
+{
+	uint8 Type = 0;
+	FTransform Tile;
+	if (!KeepersTerrain::GetTileType(Grid, Index, Type) || Type != KeepersTerrain::ChasmTileType || !SetTileType(Grid, Index, 1, Tile))
+	{
+		return false;
+	}
+	const float Size = KeepersTerrain::GetTileSize(Grid).X;
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (AStaticMeshActor* Ice = GetWorld()->SpawnActor<AStaticMeshActor>(Tile.GetLocation() + FVector(0.f, 0.f, 4.f), FRotator::ZeroRotator, Params))
+	{
+		Ice->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Ice->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")));
+		Ice->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Ice->SetActorScale3D(FVector(Size / 100.f * 0.48f, Size / 100.f * 0.48f, 0.08f));
+		if (UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(
+			LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")), Ice))
+		{
+			Material->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.75f, 0.9f, 1.f));
+			Ice->GetStaticMeshComponent()->SetMaterial(0, Material);
+		}
+		TerrainProps.Add(Ice);
+	}
+	IceTiles.Add(Index);
+	// Frozen water is ice: who stops on it slides.
+	if (UKeepersSurfaceSubsystem* Surfaces = UKeepersSurfaceSubsystem::Get(this))
+	{
+		Surfaces->Paint(Index, EKeepersSurface::Ice, false);
+	}
+	return true;
+}
+
 bool UKeepersTerrainSubsystem::ClearProp(UObject* Grid, const FIntPoint& Index)
 {
 	FVector Location;
@@ -653,6 +688,7 @@ bool UKeepersTerrainSubsystem::ClearProp(UObject* Grid, const FIntPoint& Index)
 		FTransform Unused;
 		SetTileType(Grid, Index, 1, Unused);
 		ForestTiles.Remove(Index);
+		RockTiles.Remove(Index);
 		bCleared = true;
 	}
 	return bCleared;
@@ -696,39 +732,14 @@ void UKeepersTerrainSubsystem::ApplyHeroAbility(EKeepersTerrainEffect Effect, UO
 		{
 			Path.Add(Next.GetValue());
 		}
-		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-		const float Size = KeepersTerrain::GetTileSize(Grid).X;
 		for (const FIntPoint& Index : Path)
 		{
-			uint8 Type = 0;
-			FTransform Tile;
-			if (!KeepersTerrain::GetTileType(Grid, Index, Type) || Type != KeepersTerrain::ChasmTileType || !SetTileType(Grid, Index, 1, Tile))
+			FVector Location;
+			if (FreezeWater(Grid, Index) && KeepersTerrain::GetTileLocation(Grid, Index, Location))
 			{
-				continue;
+				UKeepersJuiceSubsystem::Burst(World, Location + FVector(0.f, 0.f, 20.f), AKeepersBurst::EKind::Hit, FLinearColor(0.8f, 0.95f, 1.f), 14);
+				UE_LOG(LogKeepersTerrain, Log, TEXT("IcePath freezes (%d,%d)"), Index.X, Index.Y);
 			}
-			FActorSpawnParameters Params;
-			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			if (AStaticMeshActor* Ice = World->SpawnActor<AStaticMeshActor>(Tile.GetLocation() + FVector(0.f, 0.f, 4.f), FRotator::ZeroRotator, Params))
-			{
-				Ice->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
-				Ice->GetStaticMeshComponent()->SetStaticMesh(Cube);
-				Ice->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-				Ice->SetActorScale3D(FVector(Size / 100.f * 0.48f, Size / 100.f * 0.48f, 0.08f));
-				if (UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(
-					LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")), Ice))
-				{
-					Material->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.75f, 0.9f, 1.f));
-					Ice->GetStaticMeshComponent()->SetMaterial(0, Material);
-				}
-				TerrainProps.Add(Ice);
-			}
-			UKeepersJuiceSubsystem::Burst(World, Tile.GetLocation() + FVector(0.f, 0.f, 20.f), AKeepersBurst::EKind::Hit, FLinearColor(0.8f, 0.95f, 1.f), 14);
-			// Frozen water is ice: who stops on it slides.
-			if (UKeepersSurfaceSubsystem* Surfaces = UKeepersSurfaceSubsystem::Get(this))
-			{
-				Surfaces->Paint(Index, EKeepersSurface::Ice, false);
-			}
-			UE_LOG(LogKeepersTerrain, Log, TEXT("IcePath freezes (%d,%d)"), Index.X, Index.Y);
 		}
 		UKeepersJuiceSubsystem::Sound(this, TEXT("Splash"), 0.6f);
 		break;

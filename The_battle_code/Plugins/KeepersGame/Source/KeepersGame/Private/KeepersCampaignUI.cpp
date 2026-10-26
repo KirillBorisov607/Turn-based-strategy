@@ -14,10 +14,12 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
+#include "Misc/PackageName.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "KeepersBarks.h"
+#include "KeepersBattleHud.h"
 #include "KeepersBattleObjective.h"
 #include "KeepersJuice.h"
 #include "KeepersLoadingScreen.h"
@@ -1018,8 +1020,23 @@ void UKeepersCampaignWorldSubsystem::TickBattle()
 			{
 				++Round;
 				OnRoundStarted(CombatSystem);
+				bSaveDue = true;
 			}
 			LastTeam = Team;
+		}
+		// The field is ready once the mercenaries have come and the objective is set.
+		if (bMercenariesDone && bObjectiveChecked)
+		{
+			if (!bResumeChecked)
+			{
+				bResumeChecked = true;
+				ResumeBattle(CombatSystem);
+			}
+			if (bSaveDue)
+			{
+				bSaveDue = false;
+				SaveBattle(CombatSystem);
+			}
 		}
 	}
 	if (bFinishing)
@@ -1247,6 +1264,145 @@ void UKeepersCampaignWorldSubsystem::OnRoundStarted(UObject* CombatSystem)
 	}
 }
 
+bool UKeepersCampaignWorldSubsystem::IsNodeLevel() const
+{
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	if (!Campaign || !Campaign->IsInBattleNode() || !Campaign->GetNodes().IsValidIndex(Campaign->GetCurrentNode()))
+	{
+		return false;
+	}
+	const FString Level = FPackageName::GetShortName(Campaign->GetNodes()[Campaign->GetCurrentNode()].Level.ToString());
+	return FPackageName::GetShortName(GetWorld()->GetOutermost()->GetName()) == Level;
+}
+
+void UKeepersCampaignWorldSubsystem::SaveBattle(UObject* CombatSystem)
+{
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	if (!Campaign || !IsNodeLevel())
+	{
+		return;
+	}
+	FKeepersBattleSnapshot Snapshot;
+	Snapshot.Node = Campaign->GetCurrentNode();
+	Snapshot.Round = Round;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		bool bAlive = false;
+		KeepersReflection::FCall IsAlive(*It, TEXT("IsAlive"));
+		if (It->GetClass()->GetName() != TEXT("BP_Unit_C") || !IsAlive.Call() || !IsAlive.Get<bool>(TEXT("IsAlive"), bAlive) || !bAlive)
+		{
+			continue;
+		}
+		FKeepersUnitSnapshot& Unit = Snapshot.Units.AddDefaulted_GetRef();
+		Unit.Name = It->GetName();
+		KeepersReflection::GetIntPoint(It->GetClass(), *It, TEXT("Index"), Unit.Index);
+		KeepersReflection::GetUnitStat(*It, TEXT("HP_Current"), Unit.Hp);
+	}
+	if (const UKeepersTerrainSubsystem* Terrain = GetWorld()->GetSubsystem<UKeepersTerrainSubsystem>())
+	{
+		Snapshot.Rocks = Terrain->GetRocks();
+		Snapshot.Forests = Terrain->GetForests();
+		Snapshot.Ice = Terrain->GetIce();
+	}
+	Campaign->SaveBattle(Snapshot);
+	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Battle saved: round %d, %d units, %d rocks, %d forest"), Round, Snapshot.Units.Num(), Snapshot.Rocks.Num(), Snapshot.Forests.Num());
+}
+
+void UKeepersCampaignWorldSubsystem::ResumeBattle(UObject* CombatSystem)
+{
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	const FKeepersBattleSnapshot* Saved = Campaign ? Campaign->GetBattleToResume() : nullptr;
+	if (!Saved || !IsNodeLevel())
+	{
+		return;
+	}
+	const FKeepersBattleSnapshot Snapshot = *Saved;
+	Campaign->bResumeBattle = false;
+	UObject* Grid = KeepersReflection::GetObject(CombatSystem, TEXT("Grid"));
+	UKeepersTerrainSubsystem* Terrain = GetWorld()->GetSubsystem<UKeepersTerrainSubsystem>();
+	if (!Grid || !Terrain)
+	{
+		return;
+	}
+	// The field first: rocks, forest and ice where they were.
+	for (const FIntPoint& Index : Snapshot.Ice)
+	{
+		Terrain->FreezeWater(Grid, Index);
+	}
+	for (const FIntPoint& Index : Snapshot.Forests)
+	{
+		Terrain->GrowForest(Grid, Index);
+	}
+	TMap<FString, const FKeepersUnitSnapshot*> ByName;
+	for (const FKeepersUnitSnapshot& Unit : Snapshot.Units)
+	{
+		ByName.Add(Unit.Name, &Unit);
+	}
+	// The fallen fall again; the living get their health.
+	TArray<TPair<AActor*, FIntPoint>> Moves;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (It->GetClass()->GetName() != TEXT("BP_Unit_C"))
+		{
+			continue;
+		}
+		const FKeepersUnitSnapshot* const* Found = ByName.Find(It->GetName());
+		if (!Found)
+		{
+			UKeepersTerrainSubsystem::DamageUnit(CombatSystem, *It, 9999);
+			continue;
+		}
+		int32 Hp = 0;
+		KeepersReflection::GetUnitStat(*It, TEXT("HP_Current"), Hp);
+		if (Hp != (*Found)->Hp)
+		{
+			KeepersReflection::FCall Modify(*It, TEXT("ModifyCurrentHp"));
+			Modify.Set<int32>(TEXT("Modifier"), (*Found)->Hp - Hp);
+			Modify.Set<bool>(TEXT("ShowNumber"), false);
+			Modify.Call();
+		}
+		FIntPoint Index;
+		KeepersReflection::GetIntPoint(It->GetClass(), *It, TEXT("Index"), Index);
+		if (Index != (*Found)->Index)
+		{
+			Moves.Emplace(*It, (*Found)->Index);
+		}
+	}
+	// Moves onto free cells first, so that no unit lands where another still stands.
+	for (int32 Pass = 0; Pass < 4 && Moves.Num() > 0; ++Pass)
+	{
+		for (int32 I = Moves.Num() - 1; I >= 0; --I)
+		{
+			if (UKeepersTerrainSubsystem::UnitOnTile(Grid, Moves[I].Value) && Pass < 3)
+			{
+				continue;
+			}
+			KeepersReflection::FCall Move(CombatSystem, TEXT("SetUnitIndexOnGrid"));
+			Move.Set<UObject*>(TEXT("Unit"), Moves[I].Key);
+			Move.Set<FIntPoint>(TEXT("Index"), Moves[I].Value);
+			Move.Set<bool>(TEXT("Force"), true);
+			Move.Set<bool>(TEXT("SnapLocation"), true);
+			Move.Call();
+			Moves.RemoveAt(I);
+		}
+	}
+	for (const FIntPoint& Index : Snapshot.Rocks)
+	{
+		Terrain->RaiseRock(Grid, Index, 2);
+	}
+	Round = Snapshot.Round;
+	if (AKeepersBattleObjective* Objective = AKeepersBattleObjective::Find(GetWorld()))
+	{
+		Objective->RestoreRound(Snapshot.Round);
+	}
+	if (UKeepersBattleHudSubsystem* Hud = GetWorld()->GetSubsystem<UKeepersBattleHudSubsystem>())
+	{
+		Hud->RestoreRound(Snapshot.Round);
+	}
+	bSaveDue = false;
+	UE_LOG(LogKeepersCampaignUI, Log, TEXT("Battle resumed at round %d: %d units"), Snapshot.Round, Snapshot.Units.Num());
+}
+
 void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int32 Winner)
 {
 	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
@@ -1254,6 +1410,10 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 	TArray<UKeepersChoiceWidget::FOption> Options;
 	UKeepersJuiceSubsystem::Sound(GetWorld(), Winner == 0 ? TEXT("Victory") : TEXT("Defeat"));
 
+	if (Winner == 0)
+	{
+		Campaign->MarkBattleWon();
+	}
 	if (Winner != 0)
 	{
 		UKeepersChoiceWidget::FOption Retry;

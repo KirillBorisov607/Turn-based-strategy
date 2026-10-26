@@ -311,6 +311,10 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 	{
 		Campaign->StartNewCampaign();
 	}
+	else if (Step.Action == TEXT("continue") && Campaign)
+	{
+		Campaign->ContinueCampaign();
+	}
 	else if (Step.Action == TEXT("wound") && Campaign && Args.Num() >= 1)
 	{
 		Campaign->ResolveWounds({}, { FName(*Args[0]) });

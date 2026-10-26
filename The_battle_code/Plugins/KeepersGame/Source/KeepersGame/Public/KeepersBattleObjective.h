@@ -113,6 +113,9 @@ public:
 	AActor* GetLeader() const { return bDefeatLeader ? Leader.Get() : nullptr; }
 	bool GetBeacon(FIntPoint& OutIndex) const { OutIndex = BeaconIndex; return bReachBeacon && bSetUp && BeaconIndex.X >= 0; }
 
+	/** A saved battle goes on from this round. */
+	void RestoreRound(int32 InRound);
+
 	/** Current round (1 = the first player phase). */
 	UFUNCTION(BlueprintPure, Category = "Objective")
 	int32 GetRound() const { return Round; }

@@ -107,7 +107,23 @@ bool UKeepersCampaignSubsystem::ContinueCampaign()
 	}
 	Save = Loaded;
 	bActive = true;
-	// A battle that was interrupted is played again.
+	// A won battle whose reward screen was left: it counts.
+	if (Save->Battle.bWon && Save->Battle.Node == Save->CurrentNode && !Save->VisitedNodes.Contains(Save->CurrentNode))
+	{
+		UE_LOG(LogKeepersCampaign, Log, TEXT("Continue after the won battle of node %d"), Save->CurrentNode);
+		CompleteCurrentNode();
+		return true;
+	}
+	// An interrupted battle goes on from its last round (or from the start when it had none yet).
+	if (Save->Nodes.IsValidIndex(Save->CurrentNode) && !Save->VisitedNodes.Contains(Save->CurrentNode) && !Save->Nodes[Save->CurrentNode].Level.IsNone())
+	{
+		bResumeBattle = Save->Battle.Node == Save->CurrentNode;
+		UE_LOG(LogKeepersCampaign, Log, TEXT("Continue the battle of node %d%s"), Save->CurrentNode, bResumeBattle ? *FString::Printf(TEXT(" from round %d"), Save->Battle.Round) : TEXT(""));
+		PrepareGeneratedField(Save->CurrentNode);
+		OpenLevel(Save->Nodes[Save->CurrentNode].Level);
+		return true;
+	}
+	// A camp or an event that was left open: back on the map.
 	if (Save->CurrentNode != INDEX_NONE && !Save->VisitedNodes.Contains(Save->CurrentNode))
 	{
 		Save->CurrentNode = Save->VisitedNodes.Num() > 0 ? Save->VisitedNodes.Last() : INDEX_NONE;
@@ -589,12 +605,48 @@ int32 UKeepersCampaignSubsystem::GoldFor(EKeepersNodeType Type)
 	}
 }
 
+void UKeepersCampaignSubsystem::SaveBattle(const FKeepersBattleSnapshot& Snapshot)
+{
+	if (!Save || !bActive)
+	{
+		return;
+	}
+	Save->Battle = Snapshot;
+	WriteSave();
+}
+
+const FKeepersBattleSnapshot* UKeepersCampaignSubsystem::GetBattleToResume() const
+{
+	return bResumeBattle && Save && Save->Battle.Node != INDEX_NONE && Save->Battle.Node == Save->CurrentNode ? &Save->Battle : nullptr;
+}
+
+void UKeepersCampaignSubsystem::MarkBattleWon()
+{
+	if (Save && bActive && Save->Nodes.IsValidIndex(Save->CurrentNode))
+	{
+		Save->Battle.Node = Save->CurrentNode;
+		Save->Battle.bWon = true;
+		WriteSave();
+	}
+}
+
+void UKeepersCampaignSubsystem::ForgetBattle()
+{
+	bResumeBattle = false;
+	if (Save && Save->Battle.Node != INDEX_NONE)
+	{
+		Save->Battle = FKeepersBattleSnapshot();
+		WriteSave();
+	}
+}
+
 void UKeepersCampaignSubsystem::CompleteCurrentNode()
 {
 	if (!Save->Nodes.IsValidIndex(Save->CurrentNode))
 	{
 		return;
 	}
+	Save->Battle = FKeepersBattleSnapshot();
 	Save->VisitedNodes.AddUnique(Save->CurrentNode);
 	// An event that became a fight pays like a battle.
 	const bool bEventFight = Save->Nodes[Save->CurrentNode].Type == EKeepersNodeType::Event && !Save->Nodes[Save->CurrentNode].Level.IsNone();
@@ -656,6 +708,7 @@ void UKeepersCampaignSubsystem::EnsureLoaded()
 
 void UKeepersCampaignSubsystem::RetryCurrentNode()
 {
+	ForgetBattle();
 	if (Save->Nodes.IsValidIndex(Save->CurrentNode) && !Save->Nodes[Save->CurrentNode].Level.IsNone())
 	{
 		PrepareGeneratedField(Save->CurrentNode);

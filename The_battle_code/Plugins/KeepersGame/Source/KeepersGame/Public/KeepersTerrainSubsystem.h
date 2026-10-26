@@ -71,6 +71,14 @@ public:
 	/** Was this tile turned into forest by Sprout? */
 	bool IsForest(const FIntPoint& Index) const { return ForestTiles.Contains(Index); }
 
+	/** What the battle changed: raised rocks, grown forest, frozen water (for saving a battle). */
+	TArray<FIntPoint> GetRocks() const { return RockTiles.Array(); }
+	TArray<FIntPoint> GetForests() const { return ForestTiles.Array(); }
+	TArray<FIntPoint> GetIce() const { return IceTiles.Array(); }
+
+	/** Water on the tile becomes walkable ice with a plate; false if it is not water. */
+	bool FreezeWater(UObject* Grid, const FIntPoint& Index);
+
 	/** Pushes the unit on Target one tile away from Origin. Returns false if there was no unit. */
 	UFUNCTION(BlueprintCallable, Category = "Keepers|Terrain")
 	bool PushUnit(UObject* CombatSystem, FIntPoint Origin, FIntPoint Target);
@@ -113,6 +121,8 @@ private:
 	TMap<TWeakObjectPtr<AActor>, EKeepersTerrainEffect> PendingEffects;
 
 	TSet<FIntPoint> ForestTiles;
+	TSet<FIntPoint> RockTiles;
+	TSet<FIntPoint> IceTiles;
 
 	UPROPERTY()
 	TArray<TObjectPtr<AActor>> TerrainProps;

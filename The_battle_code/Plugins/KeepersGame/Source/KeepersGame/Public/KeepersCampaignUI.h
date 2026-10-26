@@ -175,6 +175,14 @@ private:
 	bool bMercenariesDone = false;
 	void ApplyArtifactsAtBattleStart(UObject* CombatSystem);
 	void OnRoundStarted(UObject* CombatSystem);
+	/** This world is the level of the campaign's current battle node. */
+	bool IsNodeLevel() const;
+	/** Saves the battle (once the mercenaries and the objective are in place). */
+	void SaveBattle(UObject* CombatSystem);
+	/** Puts the saved battle back: the field, the fallen, positions, health, the round. */
+	void ResumeBattle(UObject* CombatSystem);
+	bool bSaveDue = false;
+	bool bResumeChecked = false;
 	void OnBattleFinished(UObject* CombatSystem, int32 Winner);
 	/** After a victory: a hero levels up (a choice of growth), then the relic reward. */
 	void ShowLevelUp();

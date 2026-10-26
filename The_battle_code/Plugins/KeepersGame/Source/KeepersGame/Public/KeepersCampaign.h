@@ -46,6 +46,54 @@ struct FKeepersMapNode
 	uint8 Objective = 0;
 };
 
+/** A unit of a saved battle. */
+USTRUCT()
+struct FKeepersUnitSnapshot
+{
+	GENERATED_BODY()
+
+	/** Actor name: level units and units spawned in the same order keep their names. */
+	UPROPERTY(SaveGame)
+	FString Name;
+
+	UPROPERTY(SaveGame)
+	FIntPoint Index = FIntPoint(-1, -1);
+
+	UPROPERTY(SaveGame)
+	int32 Hp = 0;
+};
+
+/** A campaign battle at the start of a round: who stands where with what health, and what the field became. */
+USTRUCT()
+struct FKeepersBattleSnapshot
+{
+	GENERATED_BODY()
+
+	/** Node of the battle; INDEX_NONE — nothing saved. */
+	UPROPERTY(SaveGame)
+	int32 Node = INDEX_NONE;
+
+	UPROPERTY(SaveGame)
+	int32 Round = 0;
+
+	/** Units alive at the save; the others have fallen. */
+	UPROPERTY(SaveGame)
+	TArray<FKeepersUnitSnapshot> Units;
+
+	UPROPERTY(SaveGame)
+	TArray<FIntPoint> Rocks;
+
+	UPROPERTY(SaveGame)
+	TArray<FIntPoint> Forests;
+
+	UPROPERTY(SaveGame)
+	TArray<FIntPoint> Ice;
+
+	/** The battle is won; only the reward was left. */
+	UPROPERTY(SaveGame)
+	bool bWon = false;
+};
+
 /** A relic found during the campaign; it changes a rule for the rest of the run. */
 USTRUCT(BlueprintType)
 struct FKeepersArtifact
@@ -122,6 +170,10 @@ public:
 
 	UPROPERTY(SaveGame)
 	TArray<FString> RecruitNames;
+
+	/** The battle in progress, saved at the start of its last round. */
+	UPROPERTY(SaveGame)
+	FKeepersBattleSnapshot Battle;
 };
 
 /** What a hero learns on a level-up. */
@@ -260,6 +312,16 @@ public:
 
 	/** Set by the quick battle "Наёмники кур": the next battle gets a band of mercenaries. */
 	bool bMercenaryQuickBattle = false;
+
+	/** The battle in progress: saved every round, resumed by ContinueCampaign. */
+	void SaveBattle(const FKeepersBattleSnapshot& Snapshot);
+	/** The saved battle to put back after "Продолжить", or nullptr. */
+	const FKeepersBattleSnapshot* GetBattleToResume() const;
+	void ForgetBattle();
+	/** The battle is won: "Продолжить" counts it even if the reward screen was left open. */
+	void MarkBattleWon();
+	/** Set by ContinueCampaign when it opens an interrupted battle. */
+	bool bResumeBattle = false;
 
 	/** Enemies (E_UnitType) who join the next battle, whatever it is (quick battles, tests). */
 	TArray<uint8> NextBand;

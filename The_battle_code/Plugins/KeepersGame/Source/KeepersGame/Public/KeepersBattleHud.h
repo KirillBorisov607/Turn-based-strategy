@@ -56,6 +56,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keepers", meta = (WorldContext = "WorldContextObject"))
 	static void TestAbility(const UObject* WorldContextObject, int32 Index);
 
+	/** A saved battle goes on from this round. */
+	void RestoreRound(int32 InRound);
+
 	/** Russian name of a unit type as the HUD shows it ("Priest" -> "Друид"); empty if unknown. */
 	static FText LocalUnitName(const FString& EnglishName);
 
