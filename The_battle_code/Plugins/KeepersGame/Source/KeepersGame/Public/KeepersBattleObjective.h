@@ -98,6 +98,8 @@ public:
 	/** The next battle level without an objective of its own gets this one. */
 	static void RequestForNextBattle(EKeepersObjectiveKind Kind);
 	static EKeepersObjectiveKind TakeRequest();
+	/** The objective given to the current battle (to play it again). */
+	static EKeepersObjectiveKind LastGiven;
 
 	bool IsTimed() const { return SurviveTurns > 0; }
 	AActor* GetProtected() const { return ProtectedUnit; }

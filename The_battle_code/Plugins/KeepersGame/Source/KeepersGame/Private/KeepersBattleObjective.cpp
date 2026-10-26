@@ -195,6 +195,8 @@ void AKeepersBattleObjective::RequestForNextBattle(EKeepersObjectiveKind Kind)
 	KeepersObjective::Requested = Kind;
 }
 
+EKeepersObjectiveKind AKeepersBattleObjective::LastGiven = EKeepersObjectiveKind::None;
+
 EKeepersObjectiveKind AKeepersBattleObjective::TakeRequest()
 {
 	const EKeepersObjectiveKind Kind = KeepersObjective::Requested;
@@ -211,6 +213,7 @@ void UKeepersObjectiveSpawner::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 	const EKeepersObjectiveKind Kind = AKeepersBattleObjective::TakeRequest();
+	AKeepersBattleObjective::LastGiven = Kind;
 	if (Kind == EKeepersObjectiveKind::None || !KeepersObjective::FindCombatSystem(&InWorld))
 	{
 		return;

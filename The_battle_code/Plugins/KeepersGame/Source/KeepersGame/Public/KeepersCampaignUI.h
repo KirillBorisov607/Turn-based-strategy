@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Blueprint/UserWidget.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -162,6 +162,12 @@ public:
 private:
 	void ShowMap();
 	void TickBattle();
+	/** A battle outside the campaign: its own result panel instead of the old end screen. */
+	void TickQuickBattle();
+	bool bQuickResolved = false;
+	float QuickDelay = 0.f;
+	/** The quick battle had mercenaries: they come again on a replay. */
+	bool bQuickMercenaries = false;
 	/** Chickens hire people: bandits, archers and brutes join elite, late and boss battles of the campaign. */
 	void TickMercenaries();
 	bool bMercenariesDone = false;

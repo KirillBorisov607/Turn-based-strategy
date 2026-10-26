@@ -62,6 +62,7 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
+	bool IsTutorialActive() const { return bActive; }
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 private:

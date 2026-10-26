@@ -19,6 +19,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "KeepersBarks.h"
 #include "KeepersBattleObjective.h"
+#include "KeepersLoadingScreen.h"
+#include "KeepersTutorial.h"
 #include "KeepersCamp.h"
 #include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
@@ -772,6 +774,7 @@ void UKeepersCampaignWorldSubsystem::TickMercenaries()
 	if (Campaign->bMercenaryQuickBattle)
 	{
 		Campaign->bMercenaryQuickBattle = false;
+		bQuickMercenaries = true;
 		Band = { Bandit, Bandit, Archer, Brute };
 	}
 	else if (Campaign->IsInBattleNode())
@@ -926,7 +929,12 @@ void UKeepersCampaignWorldSubsystem::ShowMap()
 void UKeepersCampaignWorldSubsystem::TickBattle()
 {
 	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
-	if (!Campaign || !Campaign->IsInBattleNode() || bBattleResolved)
+	if (Campaign && !Campaign->IsInBattleNode())
+	{
+		TickQuickBattle();
+		return;
+	}
+	if (!Campaign || bBattleResolved)
 	{
 		return;
 	}
@@ -987,6 +995,84 @@ void UKeepersCampaignWorldSubsystem::TickBattle()
 			KeepersReflection::GetInt(CombatSystem->GetClass(), CombatSystem, TEXT("TeamIndexThatWonLastCombat"), Winner);
 			OnBattleFinished(CombatSystem, Winner);
 		}
+	}
+}
+
+void UKeepersCampaignWorldSubsystem::TickQuickBattle()
+{
+	UObject* CombatSystem = bQuickResolved ? nullptr : KeepersUI::FindCombatSystem(GetWorld());
+	const UKeepersTutorialSubsystem* Tutorial = GetWorld()->GetSubsystem<UKeepersTutorialSubsystem>();
+	if (!CombatSystem || (Tutorial && Tutorial->IsTutorialActive()))
+	{
+		return;
+	}
+	bool bFinishing = false;
+	KeepersReflection::GetBool(CombatSystem->GetClass(), CombatSystem, TEXT("IsFinishingCombat"), bFinishing);
+	if (!bFinishing)
+	{
+		return;
+	}
+	for (TObjectIterator<UUserWidget> It; It; ++It)
+	{
+		if (It->GetWorld() == GetWorld() && It->GetClass()->GetName() == TEXT("W_CombatEndScreen_C"))
+		{
+			It->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	QuickDelay += GetWorld()->GetDeltaSeconds();
+	if (QuickDelay < 0.8f)
+	{
+		return;
+	}
+	bQuickResolved = true;
+	int32 Winner = INDEX_NONE;
+	KeepersReflection::GetInt(CombatSystem->GetClass(), CombatSystem, TEXT("TeamIndexThatWonLastCombat"), Winner);
+	if (APlayerController* Player = GetWorld()->GetFirstPlayerController())
+	{
+		Player->SetShowMouseCursor(true);
+	}
+
+	// Play the same battle again (with its objective and mercenaries), or go back to the menu.
+	const FName Level(*UWorld::RemovePIEPrefix(GetWorld()->GetOutermost()->GetName()));
+	const EKeepersObjectiveKind Objective = AKeepersBattleObjective::LastGiven;
+	const bool bMercenaries = bQuickMercenaries;
+	TWeakObjectPtr<UWorld> WeakWorld(GetWorld());
+	TArray<UKeepersChoiceWidget::FOption> Options;
+	UKeepersChoiceWidget::FOption Again;
+	Again.Title = FText::FromString(TEXT("Ещё раз"));
+	Again.Description = FText::FromString(TEXT("Тот же бой с начала."));
+	Again.Color = FLinearColor(0.2f, 0.35f, 0.25f);
+	Again.Image = KeepersCards::Card(TEXT("Fight"));
+	Again.OnPicked = [WeakWorld, Level, Objective, bMercenaries]()
+	{
+		if (UWorld* World = WeakWorld.Get())
+		{
+			AKeepersBattleObjective::RequestForNextBattle(Objective);
+			UKeepersCampaignSubsystem::SetMercenaryBattle(World, bMercenaries);
+			KeepersLoading::OpenLevel(World, Level);
+		}
+	};
+	Options.Add(MoveTemp(Again));
+	UKeepersChoiceWidget::FOption Menu;
+	Menu.Title = FText::FromString(TEXT("В меню"));
+	Menu.Description = FText::FromString(TEXT("К костру."));
+	Menu.Color = FLinearColor(0.3f, 0.25f, 0.1f);
+	Menu.Image = KeepersCards::Card(TEXT("Leave"));
+	Menu.OnPicked = [WeakWorld]()
+	{
+		if (UWorld* World = WeakWorld.Get())
+		{
+			KeepersLoading::OpenLevel(World, UKeepersCampaignSubsystem::MainMenuLevel);
+		}
+	};
+	Options.Add(MoveTemp(Menu));
+	if (Winner == 0)
+	{
+		ShowChoice(FText::FromString(TEXT("Победа!")), FText::FromString(TEXT("Поле за Хранителями. Куры будут рассказывать об этом бое ещё долго.")), MoveTemp(Options));
+	}
+	else
+	{
+		ShowChoice(FText::FromString(TEXT("Поражение")), FText::FromString(KeepersUI::DefeatLine(CombatSystem)), MoveTemp(Options));
 	}
 }
 
