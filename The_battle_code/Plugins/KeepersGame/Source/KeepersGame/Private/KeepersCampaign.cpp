@@ -374,6 +374,47 @@ bool UKeepersCampaignSubsystem::UpgradeGear(FName Hero, EKeepersGear Gear)
 	return true;
 }
 
+int32 UKeepersCampaignSubsystem::GetGrowth(FName Hero, EKeepersGrowth Growth) const
+{
+	if (!Save)
+	{
+		return 0;
+	}
+	const TMap<FName, int32>& Map = Growth == EKeepersGrowth::Hp ? Save->GrowthHp : Growth == EKeepersGrowth::Move ? Save->GrowthMove : Save->GrowthAction;
+	const int32* Count = Map.Find(Hero);
+	return Count ? *Count : 0;
+}
+
+int32 UKeepersCampaignSubsystem::GetHeroLevel(FName Hero) const
+{
+	return 1 + GetGrowth(Hero, EKeepersGrowth::Hp) + GetGrowth(Hero, EKeepersGrowth::Move) + GetGrowth(Hero, EKeepersGrowth::Action);
+}
+
+FName UKeepersCampaignSubsystem::NextHeroToLevel(const TArray<FName>& Party) const
+{
+	FName Best;
+	for (const FName& Hero : Party)
+	{
+		if (GetHeroLevel(Hero) < MaxHeroLevel && (Best.IsNone() || GetHeroLevel(Hero) < GetHeroLevel(Best)))
+		{
+			Best = Hero;
+		}
+	}
+	return Best;
+}
+
+void UKeepersCampaignSubsystem::LevelUp(FName Hero, EKeepersGrowth Growth)
+{
+	if (!Save || GetHeroLevel(Hero) >= MaxHeroLevel)
+	{
+		return;
+	}
+	TMap<FName, int32>& Map = Growth == EKeepersGrowth::Hp ? Save->GrowthHp : Growth == EKeepersGrowth::Move ? Save->GrowthMove : Save->GrowthAction;
+	Map.FindOrAdd(Hero) += 1;
+	WriteSave();
+	UE_LOG(LogKeepersCampaign, Log, TEXT("%s grows to level %d"), *Hero.ToString(), GetHeroLevel(Hero));
+}
+
 bool UKeepersCampaignSubsystem::GrantGear(FName Hero, EKeepersGear Gear)
 {
 	const int32 Next = GetGearRank(Hero, Gear) + 1;

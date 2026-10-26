@@ -90,6 +90,27 @@ public:
 
 	UPROPERTY(SaveGame)
 	TMap<FName, int32> BootsRanks;
+
+	/** Hero growth in this run: what each level-up gave ("Warrior" -> count). */
+	UPROPERTY(SaveGame)
+	TMap<FName, int32> GrowthHp;
+
+	UPROPERTY(SaveGame)
+	TMap<FName, int32> GrowthMove;
+
+	UPROPERTY(SaveGame)
+	TMap<FName, int32> GrowthAction;
+};
+
+/** What a hero learns on a level-up. */
+enum class EKeepersGrowth : uint8
+{
+	/** +5 HP. */
+	Hp,
+	/** +1 movement point. */
+	Move,
+	/** +1 action point. */
+	Action
 };
 
 /** Gear the camp's smith improves. */
@@ -175,6 +196,14 @@ public:
 	static int32 ArmorHpPerRank() { return 6; }
 	/** Buys the next rank; false when maxed or too poor. */
 	bool UpgradeGear(FName Hero, EKeepersGear Gear);
+
+	/** Hero levels of the run: 1 + every level-up; a hero grows after won battles up to MaxHeroLevel. */
+	static constexpr int32 MaxHeroLevel = 5;
+	int32 GetHeroLevel(FName Hero) const;
+	int32 GetGrowth(FName Hero, EKeepersGrowth Growth) const;
+	/** The party hero who grows after this victory (the least grown one), None when all are at the top. */
+	FName NextHeroToLevel(const TArray<FName>& Party) const;
+	void LevelUp(FName Hero, EKeepersGrowth Growth);
 
 	/** Gives the next rank for free (events); false when maxed. */
 	bool GrantGear(FName Hero, EKeepersGear Gear);

@@ -143,6 +143,9 @@ private:
 	void ApplyArtifactsAtBattleStart(UObject* CombatSystem);
 	void OnRoundStarted(UObject* CombatSystem);
 	void OnBattleFinished(UObject* CombatSystem, int32 Winner);
+	/** After a victory: a hero levels up (a choice of growth), then the relic reward. */
+	void ShowLevelUp();
+	void ShowVictoryRelics();
 	void SetUiInput(UUserWidget* Focus);
 
 	/** Every battle shows a goal: a campaign battle gets one picked by its node, others "defeat all". */

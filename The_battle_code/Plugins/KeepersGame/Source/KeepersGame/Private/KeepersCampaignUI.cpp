@@ -919,6 +919,10 @@ void UKeepersCampaignWorldSubsystem::ApplyArtifactsAtBattleStart(UObject* Combat
 		const FName Id = Def ? Def->Id : NAME_None;
 		auto AddHp = [Hero](int32 Amount)
 		{
+			if (Amount <= 0)
+			{
+				return;
+			}
 			KeepersReflection::AddUnitStat(Hero, TEXT("HP_Max"), Amount);
 			KeepersReflection::FCall Heal(Hero, TEXT("ModifyCurrentHp"));
 			Heal.Set<int32>(TEXT("Modifier"), Amount);
@@ -927,9 +931,17 @@ void UKeepersCampaignWorldSubsystem::ApplyArtifactsAtBattleStart(UObject* Combat
 		};
 		auto AddStat = [Hero](const TCHAR* Max, const TCHAR* Current, int32 Amount)
 		{
+			if (Amount <= 0)
+			{
+				return;
+			}
 			KeepersReflection::AddUnitStat(Hero, Max, Amount);
 			KeepersReflection::AddUnitStat(Hero, Current, Amount);
 		};
+		// Growth of the hero in this run.
+		AddHp(Campaign->GetGrowth(Id, EKeepersGrowth::Hp) * 5);
+		AddStat(TEXT("MP_Max"), TEXT("MP_Current"), Campaign->GetGrowth(Id, EKeepersGrowth::Move));
+		AddStat(TEXT("AP_Max"), TEXT("AP_Current"), Campaign->GetGrowth(Id, EKeepersGrowth::Action));
 		if (Campaign->HasArtifact(TEXT("WarDrum")))
 		{
 			AddStat(TEXT("AP_Max"), TEXT("AP_Current"), 1);
@@ -1032,6 +1044,72 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 		return;
 	}
 
+	ShowLevelUp();
+}
+
+void UKeepersCampaignWorldSubsystem::ShowLevelUp()
+{
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	const UKeepersPartySubsystem* Party = UKeepersPartySubsystem::Get(GetWorld());
+	const FName Hero = Campaign && Party ? Campaign->NextHeroToLevel(Party->GetParty()) : NAME_None;
+	if (Hero.IsNone())
+	{
+		ShowVictoryRelics();
+		return;
+	}
+	const FKeepersHeroDef* Def = KeepersHeroes::Find(Hero);
+	const FString Name = Def ? Def->Name.ToString() : Hero.ToString();
+	TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakThis(this);
+	TWeakObjectPtr<UKeepersCampaignSubsystem> WeakCampaign(Campaign);
+	struct FGrowthCard
+	{
+		EKeepersGrowth Growth;
+		const TCHAR* Title;
+		const TCHAR* Description;
+		FLinearColor Color;
+	};
+	static const FGrowthCard Cards[] =
+	{
+		{ EKeepersGrowth::Hp, TEXT("Закалка"), TEXT("+5 к здоровью"), FLinearColor(0.45f, 0.15f, 0.12f) },
+		{ EKeepersGrowth::Move, TEXT("Лёгкий шаг"), TEXT("+1 к очкам движения"), FLinearColor(0.15f, 0.35f, 0.5f) },
+		{ EKeepersGrowth::Action, TEXT("Боевой опыт"), TEXT("+1 к очкам действия"), FLinearColor(0.4f, 0.32f, 0.1f) },
+	};
+	TArray<UKeepersChoiceWidget::FOption> Options;
+	for (const FGrowthCard& Card : Cards)
+	{
+		UKeepersChoiceWidget::FOption Option;
+		Option.Title = FText::FromString(Card.Title);
+		Option.Description = FText::FromString(Card.Description);
+		Option.Color = Card.Color;
+		const EKeepersGrowth Growth = Card.Growth;
+		Option.OnPicked = [WeakThis, WeakCampaign, Hero, Growth]()
+		{
+			if (WeakCampaign.IsValid())
+			{
+				WeakCampaign->LevelUp(Hero, Growth);
+			}
+			if (WeakThis.IsValid())
+			{
+				WeakThis->ShowVictoryRelics();
+			}
+		};
+		Options.Add(MoveTemp(Option));
+	}
+	ShowChoice(FText::FromString(FString::Printf(TEXT("%s — уровень %d"), *Name, Campaign->GetHeroLevel(Hero) + 1)),
+		FText::FromString(FString::Printf(TEXT("Бой не прошёл даром. Чему %s научился? Сейчас: +%d здоровья, +%d движения, +%d действия."), *Name,
+			Campaign->GetGrowth(Hero, EKeepersGrowth::Hp) * 5, Campaign->GetGrowth(Hero, EKeepersGrowth::Move), Campaign->GetGrowth(Hero, EKeepersGrowth::Action))),
+		MoveTemp(Options));
+}
+
+void UKeepersCampaignWorldSubsystem::ShowVictoryRelics()
+{
+	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
+	if (!Campaign)
+	{
+		return;
+	}
+	TWeakObjectPtr<UKeepersCampaignSubsystem> WeakCampaign(Campaign);
+	TArray<UKeepersChoiceWidget::FOption> Options;
 	for (const FName& Id : Campaign->RollArtifacts(3))
 	{
 		const FKeepersArtifact* Artifact = UKeepersCampaignSubsystem::FindArtifact(Id);
@@ -1056,6 +1134,8 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 		Next.OnPicked = [WeakCampaign]() { if (WeakCampaign.IsValid()) { WeakCampaign->CompleteCurrentNode(); } };
 		Options.Add(MoveTemp(Next));
 	}
-	const int32 Gold = UKeepersCampaignSubsystem::GoldFor(Campaign->GetNodes()[Campaign->GetCurrentNode()].Type);
+	const EKeepersNodeType Type = Campaign->GetNodes()[Campaign->GetCurrentNode()].Type;
+	const int32 Gold = UKeepersCampaignSubsystem::GoldFor(Type == EKeepersNodeType::Event ? EKeepersNodeType::Battle : Type)
+		+ (Campaign->HasArtifact(TEXT("LuckyCoin")) ? 10 : 0);
 	ShowChoice(FText::FromString(TEXT("Победа!")), FText::FromString(FString::Printf(TEXT("Добыча: %d золота. Выберите награду."), Gold)), MoveTemp(Options));
 }

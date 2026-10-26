@@ -5,5 +5,12 @@
 	"Description": "",
 	"TargetPlatforms": [
 		"Windows"
+	],
+	"Modules": [
+		{
+			"Name": "The_battle_code",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
 	]
 }
