@@ -11,6 +11,7 @@
 #include "HAL/PlatformFileManager.h"
 #include "ImageUtils.h"
 #include "Kismet/GameplayStatics.h"
+#include "KeepersBattleObjective.h"
 #include "KeepersCampaign.h"
 #include "KeepersCampaignUI.h"
 #include "KeepersLoadingScreen.h"
@@ -79,6 +80,20 @@ void UKeepersDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	FParse::Value(CommandLine, TEXT("-KeepersDuration="), Duration);
 	FParse::Value(CommandLine, TEXT("-KeepersWarmup="), Warmup);
 	Fps = FMath::Clamp(Fps, 5.f, 60.f);
+	// The objective of the first battle: -KeepersObjective=reach|leader|survive.
+	FString Goal;
+	if (FParse::Value(CommandLine, TEXT("-KeepersObjective="), Goal))
+	{
+		AKeepersBattleObjective::RequestForNextBattle(Goal == TEXT("reach") ? EKeepersObjectiveKind::Reach
+			: Goal == TEXT("leader") ? EKeepersObjectiveKind::Leader : Goal == TEXT("survive") ? EKeepersObjectiveKind::Survive : EKeepersObjectiveKind::None);
+		if (Goal == TEXT("leader"))
+		{
+			if (UKeepersCampaignSubsystem* Campaign = Collection.InitializeDependency<UKeepersCampaignSubsystem>())
+			{
+				Campaign->bMercenaryQuickBattle = true;
+			}
+		}
+	}
 	StepsText.ReplaceInline(TEXT("\""), TEXT(""));
 	TArray<FString> Parts;
 	StepsText.ParseIntoArray(Parts, TEXT(";"));
@@ -166,6 +181,26 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 	else if (Step.Action == TEXT("speed") && Args.Num() >= 1)
 	{
 		UGameplayStatics::SetGlobalTimeDilation(World, FMath::Clamp(FCString::Atof(*Args[0]), 0.1f, 5.f));
+	}
+	else if (Step.Action == TEXT("win"))
+	{
+		// Every enemy falls at once: the victory, the level-up and the rewards follow.
+		UObject* Combat = KeepersDirector::FindByClassName(World, TEXT("BP_CombatSystem_C"));
+		for (AActor* Unit : KeepersDirector::UnitsInCombat(Combat))
+		{
+			int32 Team = 0;
+			KeepersReflection::GetInt(Unit->GetClass(), Unit, TEXT("TeamIndex"), Team);
+			if (Team != 0)
+			{
+				KeepersReflection::FCall Hurt(Unit, TEXT("ModifyCurrentHp"));
+				Hurt.Set<int32>(TEXT("Modifier"), -999);
+				Hurt.Set<bool>(TEXT("ShowNumber"), true);
+				Hurt.Call();
+				KeepersReflection::FCall Death(Combat, TEXT("ProcessUnitDeath"));
+				Death.Set<UObject*>(TEXT("Unit"), Unit);
+				Death.Call();
+			}
+		}
 	}
 	else if (Step.Action == TEXT("orbit"))
 	{

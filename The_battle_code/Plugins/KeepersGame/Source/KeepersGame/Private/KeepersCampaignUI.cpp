@@ -1,4 +1,4 @@
-﻿#include "KeepersCampaignUI.h"
+#include "KeepersCampaignUI.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -431,7 +431,9 @@ TSharedRef<SWidget> UKeepersCampaignMapWidget::RebuildWidget()
 			const FKeepersMapNode& Node = Campaign->GetNodes()[I];
 			const bool bVisited = Campaign->GetVisitedNodes().Contains(I);
 			const bool bOpen = Available.Contains(I);
-			const FText Label = KeepersUI::NodeName(Node.Type);
+			// The battle's objective shows on its node.
+			static const TCHAR* Goals[] = { TEXT(""), TEXT(" · маяк"), TEXT(" · вожак"), TEXT(" · осада") };
+			const FText Label = FText::FromString(KeepersUI::NodeName(Node.Type).ToString() + Goals[FMath::Min<int32>(Node.Objective, 3)]);
 			const FText Note = bVisited ? FText::FromString(TEXT("пройдено")) : FText::GetEmpty();
 			UKeepersOptionButton* Button = CreateWidget<UKeepersOptionButton>(this, UKeepersOptionButton::StaticClass());
 			const FLinearColor Color = bVisited ? FLinearColor(0.2f, 0.25f, 0.2f) : KeepersUI::NodeColor(Node.Type);

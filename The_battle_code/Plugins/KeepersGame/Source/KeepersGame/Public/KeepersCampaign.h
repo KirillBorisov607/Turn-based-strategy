@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "GameFramework/SaveGame.h"
 #include "Subsystems/GameInstanceSubsystem.h"
@@ -40,6 +40,10 @@ struct FKeepersMapNode
 	/** Battle level for Battle/Elite/Boss nodes. */
 	UPROPERTY(BlueprintReadOnly, SaveGame)
 	FName Level;
+
+	/** EKeepersObjectiveKind the battle gets if its level has no objective of its own. */
+	UPROPERTY(BlueprintReadOnly, SaveGame)
+	uint8 Objective = 0;
 };
 
 /** A relic found during the campaign; it changes a rule for the rest of the run. */

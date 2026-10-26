@@ -1,5 +1,6 @@
-﻿#include "KeepersCampaign.h"
+#include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersBattleObjective.h"
 #include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
 #include "KeepersLoadingScreen.h"
@@ -173,10 +174,18 @@ void UKeepersCampaignSubsystem::GenerateMap(int32 Seed)
 			switch (Node.Type)
 			{
 			case EKeepersNodeType::Battle:
+			{
 				Node.Level = Battles[Random.RandRange(0, Battles.Num() - 1)];
+				// Not every battle is "defeat them all": a beacon to reach, a leader to fell, a siege to hold.
+				const float Goal = Random.FRand();
+				Node.Objective = static_cast<uint8>(Goal < 0.25f ? EKeepersObjectiveKind::Reach
+					: Goal < 0.45f ? EKeepersObjectiveKind::Leader
+					: Goal < 0.6f ? EKeepersObjectiveKind::Survive : EKeepersObjectiveKind::None);
 				break;
+			}
 			case EKeepersNodeType::Elite:
 				Node.Level = Elites[Random.RandRange(0, Elites.Num() - 1)];
+				Node.Objective = static_cast<uint8>(Random.FRand() < 0.5f ? EKeepersObjectiveKind::Leader : EKeepersObjectiveKind::None);
 				break;
 			case EKeepersNodeType::Boss:
 				Node.Level = KeepersCampaign::BossLevel;
@@ -559,6 +568,11 @@ void UKeepersCampaignSubsystem::WriteSave() const
 
 void UKeepersCampaignSubsystem::OpenLevel(FName Level) const
 {
+	// The battle of the current node takes its objective along.
+	if (Save && Save->Nodes.IsValidIndex(Save->CurrentNode) && Save->Nodes[Save->CurrentNode].Level == Level)
+	{
+		AKeepersBattleObjective::RequestForNextBattle(static_cast<EKeepersObjectiveKind>(Save->Nodes[Save->CurrentNode].Objective));
+	}
 	if (UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr)
 	{
 		KeepersLoading::OpenLevel(World, Level);

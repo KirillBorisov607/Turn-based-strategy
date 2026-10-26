@@ -12,7 +12,7 @@ class ACameraActor;
  *   -KeepersFps=30  -KeepersDuration=<game seconds>  -KeepersWarmup=<seconds before the first frame>;
  *   -KeepersSteps="t:action;t:action"  what happens when (game seconds from the start):
  *      autoplay — every unit of the battle plays by the AI;
- *      speed=2 — the game runs faster (time dilation);
+ *      speed=2 — the game runs faster (time dilation); win — every enemy falls (victory screens);
  *      orbit / follow / still — the camera circles the field, follows the unit whose turn it is, or stays;
  *      squad / squadhero=Warrior,1 / look=2 — the squad screen of the main menu;
  *      newcampaign / camp=open,0 / node=3 — the campaign;

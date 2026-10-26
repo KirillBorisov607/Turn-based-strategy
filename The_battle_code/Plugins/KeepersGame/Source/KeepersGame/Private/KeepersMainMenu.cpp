@@ -39,6 +39,7 @@
 #include "KeepersBattleScenery.h"
 #include "KeepersHeroes.h"
 #include "KeepersLoadingScreen.h"
+#include "KeepersBattleObjective.h"
 #include "KeepersLevelKit.h"
 #include "KeepersMapGenerator.h"
 #include "KeepersRockActor.h"
@@ -65,11 +66,16 @@ namespace KeepersMenu
 		const TCHAR* Level;
 		const TCHAR* Name;
 		const TCHAR* Description;
+		/** The objective the battle gets (the level's own objective wins). */
+		EKeepersObjectiveKind Objective = EKeepersObjectiveKind::None;
 	};
 
 	static const FQuickBattle QuickBattles[] =
 	{
 		{ TEXT("L_Slice_Hex"), TEXT("Наёмники кур"), TEXT("Куры наняли людей: разбойники, стрелки и громила вместе со слизнями. Держите строй.") },
+		{ TEXT("L_Combat_FairDuel"), TEXT("Прорыв к маяку"), TEXT("Доведите хотя бы одного героя до маяка на той стороне. Враги будут его стеречь."), EKeepersObjectiveKind::Reach },
+		{ TEXT("L_Slice_Hex"), TEXT("Охота на вожака"), TEXT("Наёмники кур с вожаком во главе. Свалите вожака — остальные разбегутся. Он держится позади."), EKeepersObjectiveKind::Leader },
+		{ TEXT("L_Combat_SoSlimy"), TEXT("Осада"), TEXT("Продержитесь четыре хода. Слизни знают, что время на вашей стороне, и лезут напролом."), EKeepersObjectiveKind::Survive },
 		{ TEXT("L_Combat_FairDuel"), TEXT("Честная дуэль"), TEXT("Три Хранителя против трёх таких же. Кто лучше использует местность?") },
 		{ TEXT("L_Combat_SoSlimy"), TEXT("Слишком скользко"), TEXT("Слизни оставляют лужи и делятся надвое. Не дайте им заполнить поле.") },
 		{ TEXT("L_Combat_ChickenHunt"), TEXT("Охота на кур"), TEXT("Куры зовут подмогу каждые два хода. Действуйте быстро.") },
@@ -479,11 +485,13 @@ void UKeepersMainMenuWidget::ShowPage(EPage Page)
 		for (const KeepersMenu::FQuickBattle& Battle : KeepersMenu::QuickBattles)
 		{
 			const FName Level(Battle.Level);
-			const bool bMercenaries = FCString::Strcmp(Battle.Name, TEXT("Наёмники кур")) == 0;
-			AddItem(Battle.Name, Battle.Description, [WeakThis, Level, bMercenaries]()
+			const bool bMercenaries = FCString::Strcmp(Battle.Name, TEXT("Наёмники кур")) == 0 || Battle.Objective == EKeepersObjectiveKind::Leader;
+			const EKeepersObjectiveKind Objective = Battle.Objective;
+			AddItem(Battle.Name, Battle.Description, [WeakThis, Level, bMercenaries, Objective]()
 			{
 				if (WeakThis.IsValid())
 				{
+					AKeepersBattleObjective::RequestForNextBattle(Objective);
 					if (UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(WeakThis.Get()))
 					{
 						Campaign->bMercenaryQuickBattle = bMercenaries;

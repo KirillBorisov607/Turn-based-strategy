@@ -1,6 +1,7 @@
 #include "KeepersAiLibrary.h"
 
 #include "Engine/World.h"
+#include "KeepersBattleObjective.h"
 #include "KeepersIntentSubsystem.h"
 #include "KeepersReflection.h"
 
@@ -133,6 +134,14 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, FIntPoint Origin, FIntP
 	}
 	const int32 Team = TeamOf(Unit);
 	double Bonus = 0.0;
+	// The battle's objective changes what the enemies want (only the enemies of the heroes read it).
+	const AKeepersBattleObjective* Objective = Team != 0 ? AKeepersBattleObjective::Find(Unit->GetWorld()) : nullptr;
+	// Against the clock the enemies rush: no time to keep safe.
+	const bool bRush = Objective && Objective->IsTimed();
+	if (bRush)
+	{
+		Bonus += 1.0;
+	}
 
 	// 1. Edges: water, pits and drops next to the spot — a gust or a shield bash ends a walker there.
 	if (!CanFly(Unit))
@@ -146,7 +155,7 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, FIntPoint Origin, FIntP
 			const FTile* Next = Map.Tiles.Find(Origin + (Map.bHex ? Hex[I] : Square[I]));
 			Edges += !Next || Next->Type == 0 || Next->Type == 5 || From->Z - Next->Z > Map.Step * 1.5f ? 1 : 0;
 		}
-		Bonus -= 0.6 * FMath::Min(Edges, 3);
+		Bonus -= (bRush ? 0.3 : 0.6) * FMath::Min(Edges, 3);
 	}
 
 	// 2. High ground over the target.
@@ -178,7 +187,7 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, FIntPoint Origin, FIntP
 	int32 HpMax = 1;
 	KeepersReflection::GetUnitStat(Unit, TEXT("HP_Current"), Hp);
 	KeepersReflection::GetUnitStat(Unit, TEXT("HP_Max"), HpMax);
-	const bool bWounded = Hp * 3 < HpMax;
+	const bool bWounded = !bRush && Hp * 3 < HpMax;
 	if (Nearest < 99 && (bRanged || bWounded))
 	{
 		Bonus += (bWounded ? 0.5 : 0.3) * FMath::Min(Nearest - 1, 3);
@@ -193,6 +202,33 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, FIntPoint Origin, FIntP
 		KeepersReflection::GetUnitStat(Victim, TEXT("HP_Current"), VictimHp);
 		KeepersReflection::GetUnitStat(Victim, TEXT("HP_Max"), VictimMax);
 		Bonus += 1.0 - static_cast<double>(VictimHp) / FMath::Max(VictimMax, 1);
+	}
+	if (Objective)
+	{
+		// The unit the heroes protect is the prey.
+		if (Victim && Victim == Objective->GetProtected())
+		{
+			Bonus += 3.0;
+		}
+		// The beacon is guarded: spots near it are worth more.
+		FIntPoint Beacon;
+		if (Objective->GetBeacon(Beacon))
+		{
+			Bonus += 0.6 * FMath::Max(0, 3 - StepsBetween(Map.bHex, Origin, Beacon));
+		}
+		// The leader keeps back; the others stand by it.
+		if (const AActor* Leader = Objective->GetLeader())
+		{
+			FIntPoint LeaderIndex;
+			if (Leader == Unit)
+			{
+				Bonus += Nearest < 99 ? 0.4 * FMath::Min(Nearest - 1, 3) : 0.0;
+			}
+			else if (KeepersReflection::GetIntPoint(Leader->GetClass(), Leader, TEXT("Index"), LeaderIndex) && StepsBetween(Map.bHex, Origin, LeaderIndex) <= 2)
+			{
+				Bonus += 0.8;
+			}
+		}
 	}
 	return BaseScore + Bonus;
 }
