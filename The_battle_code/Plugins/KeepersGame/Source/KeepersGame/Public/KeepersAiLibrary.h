@@ -20,8 +20,10 @@ public:
 	 *  - high ground over the target is better;
 	 *  - a tile another enemy already threatens is worth less: the threats spread over the heroes;
 	 *  - ranged units keep away from the heroes; a badly wounded unit keeps away too;
-	 *  - a hero that can be finished off is worth more.
+	 *  - a hero that can be finished off is worth more;
+	 *  - a shield bash that throws a hero into water or off a cliff is the best blow of all.
+	 * Spell is the plan's E_Spell.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Keepers|AI")
-	static double AdjustPlanScore(UObject* Unit, FIntPoint Origin, FIntPoint Target, double BaseScore);
+	static double AdjustPlanScore(UObject* Unit, uint8 Spell, FIntPoint Origin, FIntPoint Target, double BaseScore);
 };

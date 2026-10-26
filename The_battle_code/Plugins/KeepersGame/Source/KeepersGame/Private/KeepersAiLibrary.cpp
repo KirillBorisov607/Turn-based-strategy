@@ -117,7 +117,7 @@ namespace KeepersAi
 	}
 }
 
-double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, FIntPoint Origin, FIntPoint Target, double BaseScore)
+double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, uint8 Spell, FIntPoint Origin, FIntPoint Target, double BaseScore)
 {
 	using namespace KeepersAi;
 	UObject* Grid = Unit ? KeepersReflection::GetObject(Unit, TEXT("Grid")) : nullptr;
@@ -202,6 +202,36 @@ double UKeepersAiLibrary::AdjustPlanScore(UObject* Unit, FIntPoint Origin, FIntP
 		KeepersReflection::GetUnitStat(Victim, TEXT("HP_Current"), VictimHp);
 		KeepersReflection::GetUnitStat(Victim, TEXT("HP_Max"), VictimMax);
 		Bonus += 1.0 - static_cast<double>(VictimHp) / FMath::Max(VictimMax, 1);
+	}
+	// A shield bash pushes the target one cell away from the striker: into water or off a cliff it is a kill.
+	static uint8 ShieldBash = MAX_uint8;
+	if (ShieldBash == MAX_uint8)
+	{
+		ShieldBash = MAX_uint8 - 1;
+		if (const UEnum* Spells = LoadObject<UEnum>(nullptr, TEXT("/Game/Blueprints/Core/Combat/Spells/Utilities/E_Spell.E_Spell")))
+		{
+			for (int32 I = 0; I < Spells->NumEnums(); ++I)
+			{
+				if (Spells->GetDisplayNameTextByIndex(I).ToString() == TEXT("ShieldBash"))
+				{
+					ShieldBash = static_cast<uint8>(Spells->GetValueByIndex(I));
+					UE_LOG(LogTemp, Log, TEXT("KeepersAi: ShieldBash is spell %d"), ShieldBash);
+				}
+			}
+		}
+	}
+	if (Spell == ShieldBash && Victim && TeamOf(Victim) != Team && At && !CanFly(Victim))
+	{
+		const FIntPoint Landing = Target + (Target - Origin);
+		const FTile* To = Map.Tiles.Find(Landing);
+		if (!To || To->Type == 0 || To->Type == 5 || At->Z - To->Z > Map.Step * 1.5f)
+		{
+			Bonus += 6.0;
+		}
+		else if (To->Unit || To->Type == 2)
+		{
+			Bonus += 1.0;
+		}
 	}
 	if (Objective)
 	{
