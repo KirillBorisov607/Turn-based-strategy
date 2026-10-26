@@ -707,6 +707,16 @@ void UKeepersCampaignWorldSubsystem::TestCamp(const UObject* WorldContextObject,
 			}
 		}
 	}
+	else if (Action == TEXT("close"))
+	{
+		for (TObjectIterator<UKeepersChoiceWidget> It; It; ++It)
+		{
+			if (It->GetWorld() == World)
+			{
+				It->RemoveFromParent();
+			}
+		}
+	}
 	else if (Action == TEXT("choose"))
 	{
 		for (TObjectIterator<UKeepersChoiceWidget> It; It; ++It)
