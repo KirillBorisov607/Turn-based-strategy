@@ -17,6 +17,8 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "KeepersBattleHud.h"
+#include "KeepersBattleObjective.h"
+#include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
 #include "KeepersReflection.h"
 #include "KeepersStyle.h"
@@ -216,6 +218,17 @@ void UKeepersUnitCard::ShowUnit(UObject* Unit)
 	if (Def)
 	{
 		Role = Def->Class.ToString() + TEXT(" · ") + Role;
+	}
+	// A hero who has grown in the campaign shows the level; the leader of the enemies says so.
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(this);
+	if (Def && Team == 0 && Campaign && Campaign->IsActive() && Campaign->GetHeroLevel(Def->Id) > 1)
+	{
+		Role += FString::Printf(TEXT(" · ур. %d"), Campaign->GetHeroLevel(Def->Id));
+	}
+	const AKeepersBattleObjective* Objective = AKeepersBattleObjective::Find(GetWorld());
+	if (Objective && Objective->GetLeader() == Unit)
+	{
+		Role = TEXT("вожак · ") + Role;
 	}
 	RoleText->SetText(KeepersUnits::T(Role));
 
