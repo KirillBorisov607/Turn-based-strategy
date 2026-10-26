@@ -664,6 +664,13 @@ void AKeepersBattleObjective::UpdateWidget()
 	{
 		return;
 	}
+	const FString Title = FString::Printf(TEXT("Цель: %s"), *GoalText());
+	const FString Progress = SurviveTurns > 0 ? FString::Printf(TEXT("Ход %d из %d"), FMath::Max(Round, 1), SurviveTurns) : FString();
+	Widget->SetLines(FText::FromString(Title), FText::FromString(Progress));
+}
+
+FString AKeepersBattleObjective::GoalText() const
+{
 	TArray<FString> Goals;
 	if (SurviveTurns > 0)
 	{
@@ -694,9 +701,7 @@ void AKeepersBattleObjective::UpdateWidget()
 	{
 		Goals.Add(TEXT("победите всех врагов"));
 	}
-	const FString Title = FString::Printf(TEXT("Цель: %s"), *FString::Join(Goals, TEXT(" и ")));
-	const FString Progress = SurviveTurns > 0 ? FString::Printf(TEXT("Ход %d из %d"), FMath::Max(Round, 1), SurviveTurns) : FString();
-	Widget->SetLines(FText::FromString(Title), FText::FromString(Progress));
+	return FString::Join(Goals, TEXT(" и "));
 }
 
 void AKeepersBattleObjective::Finish(bool bHeroesWin)

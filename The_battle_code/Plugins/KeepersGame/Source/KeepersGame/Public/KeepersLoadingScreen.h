@@ -12,6 +12,8 @@ namespace KeepersLoading
 {
 	/** Opens a level behind a loading screen (picture of the place, its name, a tip). */
 	KEEPERSGAME_API void OpenLevel(const UObject* WorldContext, FName Level);
+	/** The name a level goes by on its loading screen ("Переправа"). */
+	KEEPERSGAME_API FText PlaceTitle(FName Level);
 }
 
 /**

@@ -117,6 +117,10 @@ public:
 	AActor* GetLeader() const { return bDefeatLeader ? Leader.Get() : nullptr; }
 	bool GetBeacon(FIntPoint& OutIndex) const { OutIndex = BeaconIndex; return bReachBeacon && bSetUp && BeaconIndex.X >= 0; }
 
+	/** The goals in words ("дойдите до маяка и продержитесь 4 хода"). */
+	FString GoalText() const;
+	bool IsReady() const { return bSetUp; }
+
 	/** A saved battle goes on from this round. */
 	void RestoreRound(int32 InRound);
 

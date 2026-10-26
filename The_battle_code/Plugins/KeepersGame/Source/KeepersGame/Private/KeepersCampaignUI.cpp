@@ -31,6 +31,7 @@
 #include "KeepersCamp.h"
 #include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
+#include "KeepersIntro.h"
 #include "KeepersRegions.h"
 #include "KeepersStory.h"
 #include "KeepersPartyBattle.h"
@@ -1997,6 +1998,11 @@ bool UKeepersCampaignWorldSubsystem::ResumeBattle(UObject* CombatSystem)
 	}
 	const FKeepersBattleSnapshot Snapshot = *Saved;
 	Campaign->bResumeBattle = false;
+	// A resumed battle starts at once, without its intro.
+	if (UKeepersIntroSubsystem* Intro = GetWorld()->GetSubsystem<UKeepersIntroSubsystem>())
+	{
+		Intro->IsPlaying() ? Intro->Cancel() : UKeepersIntroSubsystem::SkipNextIntro();
+	}
 	UObject* Grid = KeepersReflection::GetObject(CombatSystem, TEXT("Grid"));
 	UKeepersTerrainSubsystem* Terrain = GetWorld()->GetSubsystem<UKeepersTerrainSubsystem>();
 	if (!Grid || !Terrain)

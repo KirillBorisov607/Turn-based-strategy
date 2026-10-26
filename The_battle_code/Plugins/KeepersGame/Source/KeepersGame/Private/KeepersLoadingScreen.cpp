@@ -81,6 +81,18 @@ namespace KeepersLoading
 		return Places[0];
 	}
 
+	FText PlaceTitle(FName Level)
+	{
+		if (const FKeepersLevelRow* Row = KeepersLevelKit::FindRow(Level))
+		{
+			if (!Row->Title.IsEmpty())
+			{
+				return Row->Title;
+			}
+		}
+		return FText::FromString(FindPlace(Level).Title);
+	}
+
 	/** Vertical ramp: transparent at the top, opaque at the bottom. */
 	static UTexture2D* VerticalRamp()
 	{
