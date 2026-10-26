@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/UnrealType.h"
@@ -33,6 +33,9 @@ namespace KeepersReflection
 	/** Reads / adds to an int in BP_Unit.UnitData.Stats (HP_Max, MP_Current, AP_Max, ...). */
 	KEEPERSGAME_API bool GetUnitStat(UObject* Unit, const FString& Stat, int32& OutValue);
 	KEEPERSGAME_API bool AddUnitStat(UObject* Unit, const FString& Stat, int32 Delta);
+
+	/** Adds an E_Spell entry (by name, "Fireball") to BP_Unit.UnitData.Stats.AvailableSpells unless it is there. */
+	KEEPERSGAME_API bool AddUnitSpell(UObject* Unit, const FString& Spell);
 
 	/** Sets a Blueprint object variable. */
 	KEEPERSGAME_API bool SetObject(UObject* Object, const FString& Name, UObject* Value);

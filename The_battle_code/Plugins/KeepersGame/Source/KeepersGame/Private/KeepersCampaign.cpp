@@ -396,7 +396,48 @@ int32 UKeepersCampaignSubsystem::GetGrowth(FName Hero, EKeepersGrowth Growth) co
 
 int32 UKeepersCampaignSubsystem::GetHeroLevel(FName Hero) const
 {
-	return 1 + GetGrowth(Hero, EKeepersGrowth::Hp) + GetGrowth(Hero, EKeepersGrowth::Move) + GetGrowth(Hero, EKeepersGrowth::Action);
+	return 1 + GetGrowth(Hero, EKeepersGrowth::Hp) + GetGrowth(Hero, EKeepersGrowth::Move) + GetGrowth(Hero, EKeepersGrowth::Action) + GetLearnedSpells(Hero).Num();
+}
+
+TArray<FName> UKeepersCampaignSubsystem::GetLearnedSpells(FName Hero) const
+{
+	TArray<FName> Spells;
+	const FString Prefix = Hero.ToString() + TEXT(":");
+	for (const FName& Entry : Save ? Save->LearnedSpells : TArray<FName>())
+	{
+		const FString Text = Entry.ToString();
+		if (Text.StartsWith(Prefix))
+		{
+			Spells.Add(FName(*Text.RightChop(Prefix.Len())));
+		}
+	}
+	return Spells;
+}
+
+TArray<FName> UKeepersCampaignSubsystem::GetSpellsToLearn(FName Hero) const
+{
+	TArray<FName> Spells;
+	const FKeepersHeroDef* Def = KeepersHeroes::Find(Hero);
+	const TArray<FName> Learned = GetLearnedSpells(Hero);
+	for (const FName& Spell : Def ? Def->LearnableSpells : TArray<FName>())
+	{
+		if (!Learned.Contains(Spell) && !Def->Spells.Contains(Spell))
+		{
+			Spells.Add(Spell);
+		}
+	}
+	return Spells;
+}
+
+void UKeepersCampaignSubsystem::LearnSpell(FName Hero, FName Spell)
+{
+	if (!Save || GetHeroLevel(Hero) >= MaxHeroLevel || GetLearnedSpells(Hero).Contains(Spell))
+	{
+		return;
+	}
+	Save->LearnedSpells.Add(FName(*FString::Printf(TEXT("%s:%s"), *Hero.ToString(), *Spell.ToString())));
+	WriteSave();
+	UE_LOG(LogKeepersCampaign, Log, TEXT("%s learns %s and grows to level %d"), *Hero.ToString(), *Spell.ToString(), GetHeroLevel(Hero));
 }
 
 FName UKeepersCampaignSubsystem::NextHeroToLevel(const TArray<FName>& Party) const

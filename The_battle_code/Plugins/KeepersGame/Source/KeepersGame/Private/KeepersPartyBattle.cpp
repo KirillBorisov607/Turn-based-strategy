@@ -1,6 +1,7 @@
 #include "KeepersPartyBattle.h"
 
 #include "Engine/World.h"
+#include "KeepersCampaign.h"
 #include "KeepersHeroes.h"
 #include "KeepersLevelKit.h"
 #include "KeepersReflection.h"
@@ -80,6 +81,22 @@ void UKeepersPartyBattleSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		{
 			UE_LOG(LogKeepersPartyBattle, Log, TEXT("%s: %s goes instead of %s"), *Unit->GetName(), *Replacement->Id.ToString(), *Def->Id.ToString());
 			Missing.RemoveAt(0);
+		}
+	}
+	// Abilities learned on the run's level-ups; the units build their ability lists on BeginPlay.
+	const UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(&InWorld);
+	if (Campaign && Campaign->IsActive() && Campaign->IsInBattleNode())
+	{
+		for (AActor* Unit : Teams[0])
+		{
+			const FKeepersHeroDef* Def = KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Unit));
+			for (const FName& Spell : Def && !Def->bEnemy ? Campaign->GetLearnedSpells(Def->Id) : TArray<FName>())
+			{
+				if (KeepersReflection::AddUnitSpell(Unit, Spell.ToString()))
+				{
+					UE_LOG(LogKeepersPartyBattle, Log, TEXT("%s knows %s in this battle"), *Def->Id.ToString(), *Spell.ToString());
+				}
+			}
 		}
 	}
 }

@@ -96,6 +96,7 @@ namespace KeepersHeroes
 		Warrior.Description = T(TEXT("Стоит в первом ряду и не пускает врагов к своим. Поднимает скалы из земли: за ними прячутся от стрел, ими перекрывают проходы."));
 		Warrior.UnitType = 0;
 		Warrior.Spells = { TEXT("SwordSlash"), TEXT("RaiseRock"), TEXT("ShieldBash") };
+		Warrior.LearnableSpells = { TEXT("Throw"), TEXT("Crush"), TEXT("Rage") };
 		Warrior.Looks = {
 			MakeLook(TEXT("Ветеран"), A::Infantry, TEXT("Unit_Body_05d"), TEXT("Unit_Head_05b"), TEXT("SM_w_sword"), TEXT("SM_shield_05")),
 			MakeLook(TEXT("Рыцарь"), A::Infantry, TEXT("Unit_Body_10c"), TEXT("Unit_Head_09b"), TEXT("SM_w_broad_sword"), TEXT("SM_shield_14")),
@@ -111,6 +112,7 @@ namespace KeepersHeroes
 		Ranger.Description = T(TEXT("Бьёт издалека и держится от врагов подальше. Порывом ветра сталкивает их с обрывов и друг на друга."));
 		Ranger.UnitType = 1;
 		Ranger.Spells = { TEXT("LongRangeArrow"), TEXT("Gust"), TEXT("ShortRangeArrow") };
+		Ranger.LearnableSpells = { TEXT("Dash"), TEXT("SmokeBomb"), TEXT("ChainLightning") };
 		Ranger.Looks = {
 			MakeLook(TEXT("Лесной стрелок"), A::Archer, TEXT("Unit_Body_03a"), TEXT("Unit_Head_03c"), TEXT(""), TEXT(""), TEXT("SM_w_long_bow"), TEXT("SM_quiver_A")),
 			MakeLook(TEXT("Охотник"), A::Archer, TEXT("Unit_Body_03b"), TEXT("Unit_Head_04c"), TEXT(""), TEXT(""), TEXT("SM_w_recurve_bow"), TEXT("SM_quiver_B")),
@@ -125,6 +127,7 @@ namespace KeepersHeroes
 		Priest.Description = T(TEXT("Лечит отряд и растит лес прямо посреди боя. Корнями держит самого опасного врага на месте."));
 		Priest.UnitType = 2;
 		Priest.Spells = { TEXT("Heal"), TEXT("Sprout"), TEXT("Roots") };
+		Priest.LearnableSpells = { TEXT("IcePath"), TEXT("RaiseRock"), TEXT("SmokeBomb") };
 		Priest.Looks = {
 			MakeLook(TEXT("Отшельник"), A::Staff, TEXT("Unit_Body_12a"), TEXT("Unit_Head_03d"), TEXT("SM_w_staff_A")),
 			MakeLook(TEXT("Старейшина"), A::Staff, TEXT("Unit_Body_12c"), TEXT("Unit_Head_03e"), TEXT("SM_w_staff_C")),
@@ -140,6 +143,7 @@ namespace KeepersHeroes
 		Mage.Unlock = T(TEXT("Пройдите Солёные болота"));
 		Mage.UnitType = 9;
 		Mage.Spells = { TEXT("Fireball"), TEXT("IcePath"), TEXT("ChainLightning") };
+		Mage.LearnableSpells = { TEXT("Gust"), TEXT("RaiseRock"), TEXT("Heal") };
 		Mage.Looks = {
 			MakeLook(TEXT("Чародей"), A::Staff, TEXT("Unit_Body_12d"), TEXT("Unit_Head_11a"), TEXT("SM_w_staff_B")),
 			MakeLook(TEXT("Звездочёт"), A::Staff, TEXT("Unit_Body_12e"), TEXT("Unit_Head_11d"), TEXT("SM_w_staff_D")),
@@ -157,6 +161,7 @@ namespace KeepersHeroes
 		Rogue.Unlock = T(TEXT("Событие «Таверна»"));
 		Rogue.UnitType = 10;
 		Rogue.Spells = { TEXT("Dash"), TEXT("Backstab"), TEXT("SmokeBomb") };
+		Rogue.LearnableSpells = { TEXT("ShortRangeArrow"), TEXT("Throw"), TEXT("Roots") };
 		Rogue.Looks = {
 			MakeLook(TEXT("Карманник"), A::Infantry, TEXT("Unit_Body_02d"), TEXT("Unit_Head_02b"), TEXT("SM_w_dagger_A"), TEXT(""), TEXT("SM_w_dagger_B")),
 			MakeLook(TEXT("Головорез"), A::Infantry, TEXT("Unit_Body_02b"), TEXT("Unit_Head_04a"), TEXT("SM_w_sabre"), TEXT(""), TEXT("SM_w_dagger_C")),
@@ -174,6 +179,7 @@ namespace KeepersHeroes
 		Barbarian.Unlock = T(TEXT("Пройдите Ледяной перевал"));
 		Barbarian.UnitType = 11;
 		Barbarian.Spells = { TEXT("Crush"), TEXT("Throw"), TEXT("Rage") };
+		Barbarian.LearnableSpells = { TEXT("ShieldBash"), TEXT("RaiseRock"), TEXT("Dash") };
 		Barbarian.Looks = {
 			MakeLook(TEXT("Дикарь"), A::TwoHanded, TEXT("Unit_Body_13a"), TEXT("Unit_Head_12a"), TEXT("SM_w_TH_Axe_A")),
 			MakeLook(TEXT("Вождь"), A::TwoHanded, TEXT("Unit_Body_13c"), TEXT("Unit_Head_12c"), TEXT("SM_w_TH_maul")),
@@ -501,8 +507,19 @@ bool UKeepersPartySubsystem::UnlockLook(FName Hero, int32 Look)
 	return true;
 }
 
+void UKeepersPartySubsystem::ResetHeroes()
+{
+	Save->UnlockedHeroes.Reset();
+	Save->Party = { TEXT("Warrior"), TEXT("Ranger"), TEXT("Priest") };
+	UGameplayStatics::SaveGameToSlot(Save, KeepersHeroes::SaveSlot, 0);
+}
+
 void UKeepersPartySubsystem::WriteSave() const
 {
+	if (bTestSquad)
+	{
+		return;
+	}
 	UGameplayStatics::SaveGameToSlot(Save, KeepersHeroes::SaveSlot, 0);
 }
 

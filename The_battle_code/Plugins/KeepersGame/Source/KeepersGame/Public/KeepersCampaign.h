@@ -104,6 +104,10 @@ public:
 
 	UPROPERTY(SaveGame)
 	TMap<FName, int32> GrowthAction;
+
+	/** Abilities learned on level-ups, as "Hero:Spell". */
+	UPROPERTY(SaveGame)
+	TArray<FName> LearnedSpells;
 };
 
 /** What a hero learns on a level-up. */
@@ -208,6 +212,14 @@ public:
 	/** The party hero who grows after this victory (the least grown one), None when all are at the top. */
 	FName NextHeroToLevel(const TArray<FName>& Party) const;
 	void LevelUp(FName Hero, EKeepersGrowth Growth);
+
+	/** Levels on which a hero learns an ability instead of growing. */
+	static bool IsSpellLevel(int32 Level) { return Level == 3 || Level == 5; }
+	/** Learnable abilities the hero has not learned yet. */
+	TArray<FName> GetSpellsToLearn(FName Hero) const;
+	TArray<FName> GetLearnedSpells(FName Hero) const;
+	/** A level-up that teaches an ability. */
+	void LearnSpell(FName Hero, FName Spell);
 
 	/** Gives the next rank for free (events); false when maxed. */
 	bool GrantGear(FName Hero, EKeepersGear Gear);

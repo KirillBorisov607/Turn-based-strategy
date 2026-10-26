@@ -1,4 +1,4 @@
-﻿#include "KeepersReflection.h"
+#include "KeepersReflection.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKeepersReflection, Log, All);
 
@@ -93,6 +93,51 @@ namespace KeepersReflection
 			return true;
 		}
 		return false;
+	}
+
+	bool AddUnitSpell(UObject* Unit, const FString& Spell)
+	{
+		FProperty* DataProperty = nullptr;
+		void* Data = Unit ? FindValuePtr(Unit->GetClass(), Unit, TEXT("UnitData"), &DataProperty) : nullptr;
+		const FStructProperty* DataStruct = CastField<FStructProperty>(DataProperty);
+		FProperty* StatsProperty = nullptr;
+		void* Stats = DataStruct ? FindValuePtr(DataStruct->Struct, Data, TEXT("Stats"), &StatsProperty) : nullptr;
+		const FStructProperty* StatsStruct = CastField<FStructProperty>(StatsProperty);
+		FProperty* SpellsProperty = nullptr;
+		void* Spells = StatsStruct ? FindValuePtr(StatsStruct->Struct, Stats, TEXT("AvailableSpells"), &SpellsProperty) : nullptr;
+		const FArrayProperty* Array = CastField<FArrayProperty>(SpellsProperty);
+		const FByteProperty* Byte = Array ? CastField<FByteProperty>(Array->Inner) : nullptr;
+		const FEnumProperty* EnumProperty = Array ? CastField<FEnumProperty>(Array->Inner) : nullptr;
+		const UEnum* Enum = Byte ? Byte->Enum.Get() : EnumProperty ? EnumProperty->GetEnum() : nullptr;
+		if (!Enum || !Spells)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("AddUnitSpell %s: stats %d, spells %s (%s)"), *Spell, Stats != nullptr, SpellsProperty ? *SpellsProperty->GetName() : TEXT("-"),
+				Array ? *Array->Inner->GetClass()->GetName() : TEXT("-"));
+			return false;
+		}
+		int64 Value = INDEX_NONE;
+		for (int32 I = 0; I < Enum->NumEnums() - 1; ++I)
+		{
+			if (Enum->GetDisplayNameTextByIndex(I).ToString() == Spell)
+			{
+				Value = Enum->GetValueByIndex(I);
+			}
+		}
+		if (Value == INDEX_NONE)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("AddUnitSpell: %s is not in %s"), *Spell, *Enum->GetName());
+			return false;
+		}
+		FScriptArrayHelper Helper(Array, Spells);
+		for (int32 I = 0; I < Helper.Num(); ++I)
+		{
+			if (*Helper.GetRawPtr(I) == static_cast<uint8>(Value))
+			{
+				return false;
+			}
+		}
+		*Helper.GetRawPtr(Helper.AddValue()) = static_cast<uint8>(Value);
+		return true;
 	}
 
 	bool SetObject(UObject* Object, const FString& Name, UObject* Value)

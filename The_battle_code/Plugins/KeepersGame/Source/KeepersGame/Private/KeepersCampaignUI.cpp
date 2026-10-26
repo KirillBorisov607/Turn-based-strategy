@@ -191,6 +191,16 @@ UTexture2D* KeepersCards::RelicIcon(FName Id)
 	return FCString::Strncmp(*Name, TEXT("Icon_"), 5) == 0 ? Icon(*Name) : Card(*Name);
 }
 
+UTexture2D* KeepersCards::SpellIcon(FName Spell)
+{
+	const FString Name = Spell.ToString();
+	if (UTexture2D* Medallion = Card(*Name))
+	{
+		return Medallion;
+	}
+	return Icon(Spell == TEXT("Gust") ? TEXT("Icon_WindGust") : *(TEXT("Icon_") + Name));
+}
+
 UTexture2D* KeepersCards::Portrait(FName Hero)
 {
 	const FString Name = Hero.ToString();
@@ -706,6 +716,10 @@ void UKeepersCampaignWorldSubsystem::TestCamp(const UObject* WorldContextObject,
 				break;
 			}
 		}
+	}
+	else if (Action == TEXT("levelup"))
+	{
+		Self->ShowLevelUp();
 	}
 	else if (Action == TEXT("close"))
 	{
@@ -1277,8 +1291,41 @@ void UKeepersCampaignWorldSubsystem::ShowLevelUp()
 		{ EKeepersGrowth::Action, TEXT("Боевой опыт"), TEXT("+1 к очкам действия"), FLinearColor(0.4f, 0.32f, 0.1f), TEXT("Action") },
 	};
 	TArray<UKeepersChoiceWidget::FOption> Options;
+	// Levels 3 and 5 teach an ability: one of the hero's learnable ones, or toughness instead.
+	const int32 NextLevel = Campaign->GetHeroLevel(Hero) + 1;
+	const TArray<FName> ToLearn = Campaign->GetSpellsToLearn(Hero);
+	const bool bLearns = UKeepersCampaignSubsystem::IsSpellLevel(NextLevel) && ToLearn.Num() > 0;
+	if (bLearns)
+	{
+		for (int32 I = 0; I < FMath::Min(ToLearn.Num(), 2); ++I)
+		{
+			const FName Spell = ToLearn[I];
+			const FKeepersSpellInfo* Info = KeepersHeroes::FindSpell(Spell);
+			UKeepersChoiceWidget::FOption Option;
+			Option.Title = Info ? Info->Name : FText::FromName(Spell);
+			Option.Description = Info ? FText::FromString(Info->Description.ToString() + TEXT("\n") + Info->Numbers.ToString()) : FText::GetEmpty();
+			Option.Color = FLinearColor(0.32f, 0.2f, 0.45f);
+			Option.Image = KeepersCards::SpellIcon(Spell);
+			Option.OnPicked = [WeakThis, WeakCampaign, Hero, Spell]()
+			{
+				if (WeakCampaign.IsValid())
+				{
+					WeakCampaign->LearnSpell(Hero, Spell);
+				}
+				if (WeakThis.IsValid())
+				{
+					WeakThis->ShowVictoryRelics();
+				}
+			};
+			Options.Add(MoveTemp(Option));
+		}
+	}
 	for (const FGrowthCard& Card : Cards)
 	{
+		if (bLearns && Card.Growth != EKeepersGrowth::Hp)
+		{
+			continue;
+		}
 		UKeepersChoiceWidget::FOption Option;
 		Option.Title = FText::FromString(Card.Title);
 		Option.Description = FText::FromString(Card.Description);
@@ -1298,9 +1345,11 @@ void UKeepersCampaignWorldSubsystem::ShowLevelUp()
 		};
 		Options.Add(MoveTemp(Option));
 	}
-	ShowChoice(FText::FromString(FString::Printf(TEXT("%s — уровень %d"), *Name, Campaign->GetHeroLevel(Hero) + 1)),
-		FText::FromString(FString::Printf(TEXT("Бой не прошёл даром. Чему %s научился? Сейчас: +%d здоровья, +%d движения, +%d действия."), *Name,
-			Campaign->GetGrowth(Hero, EKeepersGrowth::Hp) * 5, Campaign->GetGrowth(Hero, EKeepersGrowth::Move), Campaign->GetGrowth(Hero, EKeepersGrowth::Action))),
+	const FString Grown = FString::Printf(TEXT("Сейчас: +%d здоровья, +%d движения, +%d действия."),
+		Campaign->GetGrowth(Hero, EKeepersGrowth::Hp) * 5, Campaign->GetGrowth(Hero, EKeepersGrowth::Move), Campaign->GetGrowth(Hero, EKeepersGrowth::Action));
+	ShowChoice(FText::FromString(FString::Printf(TEXT("%s — уровень %d%s"), *Name, NextLevel, bLearns ? TEXT(": новое умение") : TEXT(""))),
+		FText::FromString(bLearns ? FString::Printf(TEXT("Опыт открывает новое умение. Какое возьмёт %s? %s"), *Name, *Grown)
+			: FString::Printf(TEXT("Бой не прошёл даром. Чему %s научился? %s"), *Name, *Grown)),
 		MoveTemp(Options), KeepersCards::Portrait(Hero));
 }
 
@@ -1338,7 +1387,7 @@ void UKeepersCampaignWorldSubsystem::ShowVictoryRelics()
 		Next.OnPicked = [WeakCampaign]() { if (WeakCampaign.IsValid()) { WeakCampaign->CompleteCurrentNode(); } };
 		Options.Add(MoveTemp(Next));
 	}
-	const EKeepersNodeType Type = Campaign->GetNodes()[Campaign->GetCurrentNode()].Type;
+	const EKeepersNodeType Type = Campaign->GetNodes().IsValidIndex(Campaign->GetCurrentNode()) ? Campaign->GetNodes()[Campaign->GetCurrentNode()].Type : EKeepersNodeType::Battle;
 	const int32 Gold = UKeepersCampaignSubsystem::GoldFor(Type == EKeepersNodeType::Event ? EKeepersNodeType::Battle : Type)
 		+ (Campaign->HasArtifact(TEXT("LuckyCoin")) ? 10 : 0);
 	ShowChoice(FText::FromString(TEXT("Победа!")), FText::FromString(FString::Printf(TEXT("Добыча: %d золота. Выберите награду."), Gold)), MoveTemp(Options));

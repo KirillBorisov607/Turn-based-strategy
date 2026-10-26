@@ -36,6 +36,8 @@ struct FKeepersHeroDef
 	/** How the hero is opened, for locked cards. */
 	FText Unlock;
 	TArray<FName> Spells;
+	/** Abilities the hero can learn on the run's level-ups (UKeepersCampaignSubsystem::IsSpellLevel). */
+	TArray<FName> LearnableSpells;
 	TArray<FKeepersLook> Looks;
 	/** Enemies of the Toony Tiny RTS Set (bandits, brutes): not in the roster, every unit picks one of the looks. */
 	bool bEnemy = false;
@@ -164,6 +166,12 @@ public:
 	bool UnlockLook(FName Hero, int32 Look);
 
 	void WriteSave() const;
+
+	/** Recordings and tests change the squad without touching the player's save. */
+	bool bTestSquad = false;
+
+	/** Test hook: forgets opened heroes and brings the first three back. */
+	void ResetHeroes();
 
 private:
 	FKeepersHeroChoice& Choice(FName Hero);

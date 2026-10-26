@@ -53,6 +53,8 @@ namespace KeepersCards
 	KEEPERSGAME_API UTexture2D* Card(const TCHAR* Name);
 	/** The picture of a relic. */
 	KEEPERSGAME_API UTexture2D* RelicIcon(FName Id);
+	/** The picture of an ability: its card medallion, else its spell icon. */
+	KEEPERSGAME_API UTexture2D* SpellIcon(FName Spell);
 	/** A hero's portrait (T_Portrait_<Hero>). */
 	KEEPERSGAME_API UTexture2D* Portrait(FName Hero);
 }

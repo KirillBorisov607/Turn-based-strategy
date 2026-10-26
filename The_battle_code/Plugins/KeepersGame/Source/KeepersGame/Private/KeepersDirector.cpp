@@ -81,12 +81,20 @@ void UKeepersDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	FParse::Value(CommandLine, TEXT("-KeepersDuration="), Duration);
 	FParse::Value(CommandLine, TEXT("-KeepersWarmup="), Warmup);
 	Fps = FMath::Clamp(Fps, 5.f, 60.f);
-	// The squad: -KeepersParty=Mage,Rogue,Barbarian (opens them too).
+	// The squad: -KeepersParty=Mage,Rogue,Barbarian (opens them for this run only, the save stays as it was).
+	if (FParse::Param(CommandLine, TEXT("KeepersResetHeroes")))
+	{
+		if (UKeepersPartySubsystem* Party = Collection.InitializeDependency<UKeepersPartySubsystem>())
+		{
+			Party->ResetHeroes();
+		}
+	}
 	FString PartyList;
 	if (FParse::Value(CommandLine, TEXT("-KeepersParty="), PartyList, false))
 	{
 		if (UKeepersPartySubsystem* Party = Collection.InitializeDependency<UKeepersPartySubsystem>())
 		{
+			Party->bTestSquad = true;
 			TArray<FString> Names;
 			PartyList.ParseIntoArray(Names, TEXT(","));
 			for (const FName& Hero : TArray<FName>(Party->GetParty()))
@@ -265,6 +273,10 @@ void UKeepersDirectorSubsystem::RunStep(const FStep& Step)
 	else if (Step.Action == TEXT("newcampaign") && Campaign)
 	{
 		Campaign->StartNewCampaign();
+	}
+	else if (Step.Action == TEXT("learn") && Campaign && Args.Num() >= 2)
+	{
+		Campaign->LearnSpell(FName(*Args[0]), FName(*Args[1]));
 	}
 	else if (Step.Action == TEXT("node") && Campaign && Args.Num() >= 1)
 	{
