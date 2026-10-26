@@ -19,6 +19,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "KeepersBarks.h"
 #include "KeepersBattleObjective.h"
+#include "KeepersJuice.h"
 #include "KeepersLoadingScreen.h"
 #include "KeepersTutorial.h"
 #include "KeepersCamp.h"
@@ -276,6 +277,7 @@ void UKeepersOptionButton::HandleClicked()
 {
 	if (OnPicked)
 	{
+		UKeepersJuiceSubsystem::Sound(this, TEXT("Card"));
 		// The choice is made: its panel closes (the callback may open another one, or a level).
 		if (UKeepersChoiceWidget* Panel = GetTypedOuter<UKeepersChoiceWidget>())
 		{
@@ -1066,6 +1068,7 @@ void UKeepersCampaignWorldSubsystem::TickQuickBattle()
 		}
 	};
 	Options.Add(MoveTemp(Menu));
+	UKeepersJuiceSubsystem::Sound(GetWorld(), Winner == 0 ? TEXT("Victory") : TEXT("Defeat"));
 	if (Winner == 0)
 	{
 		ShowChoice(FText::FromString(TEXT("Победа!")), FText::FromString(TEXT("Поле за Хранителями. Куры будут рассказывать об этом бое ещё долго.")), MoveTemp(Options));
@@ -1200,6 +1203,7 @@ void UKeepersCampaignWorldSubsystem::OnBattleFinished(UObject* CombatSystem, int
 	UKeepersCampaignSubsystem* Campaign = UKeepersCampaignSubsystem::Get(GetWorld());
 	TWeakObjectPtr<UKeepersCampaignSubsystem> WeakCampaign(Campaign);
 	TArray<UKeepersChoiceWidget::FOption> Options;
+	UKeepersJuiceSubsystem::Sound(GetWorld(), Winner == 0 ? TEXT("Victory") : TEXT("Defeat"));
 
 	if (Winner != 0)
 	{
@@ -1245,6 +1249,7 @@ void UKeepersCampaignWorldSubsystem::ShowLevelUp()
 	}
 	const FKeepersHeroDef* Def = KeepersHeroes::Find(Hero);
 	const FString Name = Def ? Def->Name.ToString() : Hero.ToString();
+	UKeepersJuiceSubsystem::Sound(GetWorld(), TEXT("LevelUp"));
 	TWeakObjectPtr<UKeepersCampaignWorldSubsystem> WeakThis(this);
 	TWeakObjectPtr<UKeepersCampaignSubsystem> WeakCampaign(Campaign);
 	struct FGrowthCard

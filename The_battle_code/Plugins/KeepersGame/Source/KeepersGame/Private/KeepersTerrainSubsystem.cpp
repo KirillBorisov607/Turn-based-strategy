@@ -1,4 +1,4 @@
-﻿#include "KeepersTerrainSubsystem.h"
+#include "KeepersTerrainSubsystem.h"
 
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
@@ -224,6 +224,7 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 			if (bHasLocation)
 			{
 				UKeepersJuiceSubsystem::Burst(GetWorld(), TargetLocation + FVector(0.f, 0.f, 20.f), AKeepersBurst::EKind::Puff, FLinearColor(0.62f, 0.55f, 0.45f), 14, 0.9f);
+				UKeepersJuiceSubsystem::Sound(this, TEXT("Rock"));
 				UKeepersJuiceSubsystem::Burst(GetWorld(), TargetLocation + FVector(0.f, 0.f, 60.f), AKeepersBurst::EKind::Hit, FLinearColor(0.5f, 0.5f, 0.52f), 12);
 			}
 			UKeepersBarkLibrary::BarkAbout(Cast<AActor>(KeepersTerrain::GetUnitOnTile(Grid, Origin)), EKeepersBarkSituation::RaisesRock, 0.8f);
@@ -238,6 +239,7 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 			if (bHasLocation)
 			{
 				UKeepersJuiceSubsystem::Burst(GetWorld(), TargetLocation + FVector(0.f, 0.f, 30.f), AKeepersBurst::EKind::Hit, FLinearColor(0.42f, 0.27f, 0.12f), 14);
+				UKeepersJuiceSubsystem::Sound(this, TEXT("Leaves"), 0.8f);
 			}
 			KeepersReflection::FCall SetMp(Rooted, TEXT("SetCurrentMp"));
 			SetMp.Set<int32>(TEXT("Mp"), 0);
@@ -251,6 +253,7 @@ void UKeepersTerrainSubsystem::OnTerrainAnimationDestroyed(AActor* Animation)
 			if (bHasLocation)
 			{
 				UKeepersJuiceSubsystem::Burst(GetWorld(), TargetLocation + FVector(0.f, 0.f, 40.f), AKeepersBurst::EKind::Heal, FLinearColor(0.35f, 0.85f, 0.25f), 16, 1.2f);
+				UKeepersJuiceSubsystem::Sound(this, TEXT("Leaves"));
 				UKeepersJuiceSubsystem::Burst(GetWorld(), TargetLocation + FVector(0.f, 0.f, 80.f), AKeepersBurst::EKind::Hit, FLinearColor(0.2f, 0.6f, 0.15f), 10);
 			}
 			UKeepersBarkLibrary::BarkAbout(Cast<AActor>(KeepersTerrain::GetUnitOnTile(Grid, Origin)), EKeepersBarkSituation::GrowsForest, 0.6f);
@@ -454,6 +457,7 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 	if (const AActor* Pushed = Cast<AActor>(Unit))
 	{
 		UKeepersJuiceSubsystem::Burst(GetWorld(), Pushed->GetActorLocation(), AKeepersBurst::EKind::Puff, FLinearColor(0.85f, 0.92f, 1.f), 10, 0.7f);
+		UKeepersJuiceSubsystem::Sound(this, TEXT("Gust"));
 	}
 	KeepersReflection::FCall Move(CombatSystem, TEXT("SetUnitIndexOnGrid"));
 	Move.Set<UObject*>(TEXT("Unit"), Unit);
@@ -471,6 +475,7 @@ bool UKeepersTerrainSubsystem::PushUnit(UObject* CombatSystem, FIntPoint Origin,
 		if (KeepersTerrain::GetTileLocation(Grid, Destination.GetValue(), Splash))
 		{
 			UKeepersJuiceSubsystem::Burst(GetWorld(), Splash, AKeepersBurst::EKind::Hit, FLinearColor(0.35f, 0.65f, 1.f), 20, 1.1f);
+			UKeepersJuiceSubsystem::Sound(this, TEXT("Splash"));
 		}
 		DamageUnit(CombatSystem, Unit, 9999);
 	}

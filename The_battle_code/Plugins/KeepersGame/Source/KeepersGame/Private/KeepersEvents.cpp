@@ -3,6 +3,7 @@
 #include "KeepersCampaign.h"
 #include "KeepersCampaignUI.h"
 #include "KeepersHeroes.h"
+#include "KeepersJuice.h"
 
 #include "Engine/World.h"
 
@@ -220,6 +221,7 @@ namespace KeepersEvents
 				return FString::Printf(TEXT("−%d золота"), -Amount);
 			}
 			Campaign->AddGold(Amount);
+			UKeepersJuiceSubsystem::Sound(Context, TEXT("Coin"));
 			return FString::Printf(TEXT("+%d золота"), Amount);
 		case EEffect::Artifact:
 		{

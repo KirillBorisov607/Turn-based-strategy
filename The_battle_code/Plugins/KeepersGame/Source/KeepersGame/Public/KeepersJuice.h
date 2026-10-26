@@ -58,6 +58,9 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 
+	/** Plays a sound of /Game/Keepers/Audio/SFX ("Hit" -> SFX_Hit), with a little variation of pitch. */
+	static void Sound(const UObject* WorldContext, const TCHAR* Name, float Volume = 1.f);
+
 	/** Spawns a burst at a place; also for other code (abilities, objectives). */
 	static void Burst(UWorld* World, const FVector& Location, AKeepersBurst::EKind Kind, const FLinearColor& Color, int32 Count, float Size = 1.f);
 

@@ -5,7 +5,9 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
 #include "KeepersReflection.h"
+#include "Sound/SoundBase.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKeepersJuice, Log, All);
@@ -139,6 +141,15 @@ TStatId UKeepersJuiceSubsystem::GetStatId() const
 	RETURN_QUICK_DECLARE_CYCLE_STAT(UKeepersJuiceSubsystem, STATGROUP_Tickables);
 }
 
+void UKeepersJuiceSubsystem::Sound(const UObject* WorldContext, const TCHAR* Name, float Volume)
+{
+	USoundBase* Sound = LoadObject<USoundBase>(nullptr, *FString::Printf(TEXT("/Game/Keepers/Audio/SFX/SFX_%s.SFX_%s"), Name, Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (Sound && WorldContext && WorldContext->GetWorld())
+	{
+		UGameplayStatics::PlaySound2D(WorldContext, Sound, Volume, FMath::FRandRange(0.92f, 1.08f));
+	}
+}
+
 void UKeepersJuiceSubsystem::Burst(UWorld* World, const FVector& Location, AKeepersBurst::EKind Kind, const FLinearColor& Color, int32 Count, float Size)
 {
 	FActorSpawnParameters Params;
@@ -199,14 +210,17 @@ void UKeepersJuiceSubsystem::Tick(float DeltaTime)
 		if (Change < 0)
 		{
 			Burst(World, Chest, AKeepersBurst::EKind::Hit, KeepersJuice::ColorOf(Unit, Team), FMath::Clamp(8 - Change * 2, 10, 24));
+			Sound(World, Unit->GetName().Contains(TEXT("Slime")) ? TEXT("Slime") : TEXT("Hit"), FMath::Clamp(0.6f - Change * 0.05f, 0.6f, 1.f));
 			if (Hp <= 0)
 			{
+				Sound(World, TEXT("Puff"), 0.8f);
 				Burst(World, Unit->GetActorLocation(), AKeepersBurst::EKind::Puff, FLinearColor(0.85f, 0.82f, 0.78f), 12, 1.f);
 			}
 		}
 		else
 		{
 			Burst(World, Chest, AKeepersBurst::EKind::Heal, FLinearColor(0.4f, 1.f, 0.45f), FMath::Clamp(4 + Change, 6, 16));
+			Sound(World, TEXT("Heal"), 0.7f);
 		}
 	}
 }
