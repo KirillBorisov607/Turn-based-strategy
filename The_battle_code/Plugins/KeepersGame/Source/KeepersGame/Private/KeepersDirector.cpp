@@ -13,6 +13,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "KeepersBattleObjective.h"
 #include "KeepersCampaign.h"
+#include "KeepersHeroes.h"
 #include "KeepersCampaignUI.h"
 #include "KeepersLoadingScreen.h"
 #include "KeepersMainMenu.h"
@@ -80,6 +81,25 @@ void UKeepersDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	FParse::Value(CommandLine, TEXT("-KeepersDuration="), Duration);
 	FParse::Value(CommandLine, TEXT("-KeepersWarmup="), Warmup);
 	Fps = FMath::Clamp(Fps, 5.f, 60.f);
+	// The squad: -KeepersParty=Mage,Rogue,Barbarian (opens them too).
+	FString PartyList;
+	if (FParse::Value(CommandLine, TEXT("-KeepersParty="), PartyList, false))
+	{
+		if (UKeepersPartySubsystem* Party = Collection.InitializeDependency<UKeepersPartySubsystem>())
+		{
+			TArray<FString> Names;
+			PartyList.ParseIntoArray(Names, TEXT(","));
+			for (const FName& Hero : TArray<FName>(Party->GetParty()))
+			{
+				Party->RemoveFromParty(Hero);
+			}
+			for (const FString& Name : Names)
+			{
+				Party->UnlockHero(FName(*Name));
+				Party->AddToParty(FName(*Name));
+			}
+		}
+	}
 	// The objective of the first battle: -KeepersObjective=reach|leader|survive.
 	FString Goal;
 	if (FParse::Value(CommandLine, TEXT("-KeepersObjective="), Goal))

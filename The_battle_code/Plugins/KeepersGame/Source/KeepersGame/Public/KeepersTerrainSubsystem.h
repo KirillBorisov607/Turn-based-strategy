@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Subsystems/WorldSubsystem.h"
 #include "KeepersTerrainSubsystem.generated.h"
@@ -11,7 +11,19 @@ enum class EKeepersTerrainEffect : uint8
 	RaiseRock,
 	Push,
 	Sprout,
-	Roots
+	Roots,
+	// The Mage.
+	Fireball,
+	IcePath,
+	ChainLightning,
+	// The Rogue.
+	Dash,
+	Backstab,
+	SmokeBomb,
+	// The Barbarian.
+	Crush,
+	Throw,
+	Rage
 };
 
 /**
@@ -28,6 +40,16 @@ enum class EKeepersTerrainEffect : uint8
  *  - BP_SpellAnim_Sprout: the target tile becomes forest (DoubleCost). An empty tile grows a tree that
  *    blocks line of sight; an occupied tile grows a bush.
  *  - BP_SpellAnim_Roots: the target's MP (already cut by the spell) is set to exactly 0 for its next turn.
+ *  - BP_SpellAnim_Fireball: forest on the target and around it burns down (plain ground again).
+ *  - BP_SpellAnim_IcePath: water on the target and the next cell along the cast freezes into walkable ice.
+ *  - BP_SpellAnim_ChainLightning: the bolt jumps to up to two more foes within two cells (3 damage each).
+ *  - BP_SpellAnim_Dash: the Rogue lands on the empty target cell; foes next to the landing take 2.
+ *  - BP_SpellAnim_Backstab: a foe flanked by another of the Rogue's allies takes the hit twice.
+ *  - BP_SpellAnim_SmokeBomb: smoke on the target and around it blocks sight for two rounds.
+ *  - BP_SpellAnim_Crush: rocks and trees raised in battle on the target and around it are smashed.
+ *  - BP_SpellAnim_Throw: the target flies over the Barbarian to the cell behind it (water drowns it,
+ *    a rock or a unit hurts both).
+ *  - BP_SpellAnim_Rage: the Barbarian (who paid health) gets its action points back and +1 movement.
  */
 UCLASS()
 class KEEPERSGAME_API UKeepersTerrainSubsystem : public UWorldSubsystem
@@ -65,6 +87,14 @@ private:
 
 	/** Damages a unit and lets the combat system process its death. */
 	static void DamageUnit(UObject* CombatSystem, UObject* Unit, int32 Amount);
+
+	/** Moves a unit by force to Destination (none: the edge): bumps, falls into water, or lands. */
+	bool ForcedMove(UObject* CombatSystem, UObject* Grid, UObject* Unit, const TOptional<FIntPoint>& Destination, int32 ExtraDamage);
+
+	/** Effects of the Mage's, the Rogue's and the Barbarian's abilities. */
+	void ApplyHeroAbility(EKeepersTerrainEffect Effect, UObject* Grid, const FIntPoint& Origin, const FIntPoint& Target);
+	/** Removes a rock or a tree raised in battle on a cell; the cell becomes plain ground. */
+	bool ClearProp(UObject* Grid, const FIntPoint& Index);
 
 	FDelegateHandle SpawnHandle;
 

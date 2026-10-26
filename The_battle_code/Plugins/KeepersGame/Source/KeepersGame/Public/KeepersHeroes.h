@@ -109,6 +109,10 @@ public:
 	/** Opened outfits as "Hero:Index"; the first outfit of every hero is always open. */
 	UPROPERTY(SaveGame)
 	TArray<FName> UnlockedLooks;
+
+	/** Heroes opened beyond the first three (the Mage, the Rogue, the Barbarian). */
+	UPROPERTY(SaveGame)
+	TArray<FName> UnlockedHeroes;
 };
 
 /**
@@ -129,6 +133,13 @@ public:
 
 	/** Whether the hero can be taken into the squad now. */
 	bool IsUnlocked(FName Hero) const;
+
+	/** Opens a hero for good (a region cleared, an event); returns true the first time. */
+	bool UnlockHero(FName Hero);
+
+	/** Test hook: opens the heroes and makes them the squad ("Mage,Rogue,Barbarian"). */
+	UFUNCTION(BlueprintCallable, Category = "Keepers|Party", meta = (WorldContext = "WorldContextObject"))
+	static void TestSetParty(const UObject* WorldContextObject, const FString& Heroes);
 
 	const TArray<FName>& GetParty() const { return Save->Party; }
 	bool IsInParty(FName Hero) const { return Save->Party.Contains(Hero); }

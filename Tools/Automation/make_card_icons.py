@@ -185,6 +185,62 @@ def road(d):
         d.line((C, y, C, y + 18), fill=DARK, width=6)
 
 
+def snowflake(d):
+    for k in range(6):
+        a = math.radians(60 * k)
+        x, y = C + 78 * math.cos(a), C + 78 * math.sin(a)
+        d.line((C, C, x, y), fill=DARK, width=16)
+        d.line((C, C, x, y), fill=LIGHT, width=9)
+        for side in (-1, 1):
+            b = a + side * math.radians(40)
+            mx, my = C + 48 * math.cos(a), C + 48 * math.sin(a)
+            d.line((mx, my, mx + 26 * math.cos(b), my + 26 * math.sin(b)), fill=LIGHT, width=7)
+
+
+def dagger(d):
+    outline_poly(d, [(C, 40), (C + 18, 70), (C + 14, 150), (C - 14, 150), (C - 18, 70)])
+    outline_poly(d, [(C - 46, 150), (C + 46, 150), (C + 46, 166), (C - 46, 166)], fill=(236, 196, 108, 255), width=5)
+    outline_poly(d, [(C - 10, 166), (C + 10, 166), (C + 10, 214), (C - 10, 214)], fill=(150, 100, 60, 255), width=5)
+
+
+def cloud(d):
+    for x, y, r in ((96, 140, 40), (140, 116, 50), (176, 146, 36), (128, 158, 42)):
+        d.ellipse((x - r - 4, y - r - 4, x + r + 4, y + r + 4), fill=DARK)
+    for x, y, r in ((96, 140, 40), (140, 116, 50), (176, 146, 36), (128, 158, 42)):
+        d.ellipse((x - r, y - r, x + r, y + r), fill=(214, 214, 220, 255))
+
+
+def hammer(d):
+    d.line((90, 200, 160, 110), fill=DARK, width=22)
+    d.line((90, 200, 160, 110), fill=(150, 100, 60, 255), width=12)
+    outline_poly(d, [(120, 60), (200, 120), (176, 152), (96, 92)])
+
+
+def throw_arc(d):
+    d.arc((60, 70, 200, 210), 200, 340, fill=DARK, width=26)
+    d.arc((60, 70, 200, 210), 200, 340, fill=LIGHT, width=14)
+    outline_poly(d, [(184, 96), (214, 128), (174, 136)])
+
+
+def dash_lines(d):
+    for k, y in enumerate((96, 128, 160)):
+        d.line((56 + k * 12, y, 140, y), fill=DARK, width=14)
+        d.line((56 + k * 12, y, 140, y), fill=LIGHT, width=7)
+    outline_poly(d, [(140, 80), (206, 128), (140, 176)])
+
+
+def fireball(d):
+    flame(d)
+    d.ellipse((96, 120, 160, 184), fill=(255, 120, 40, 255), outline=DARK, width=5)
+
+
+def rage(d):
+    outline_poly(d, star_pts(C, C, 86, 44, 8), fill=(255, 110, 70, 255))
+    d.line((100, 116, 122, 128), fill=DARK, width=8)
+    d.line((156, 116, 134, 128), fill=DARK, width=8)
+    d.arc((104, 140, 152, 176), 200, 340, fill=DARK, width=7)
+
+
 ICONS = {
     # growth
     "Hp": ((196, 62, 56), heart),
@@ -211,6 +267,16 @@ ICONS = {
     "Bell": ((206, 150, 44), bell),
     "Leaf": ((86, 132, 60), leaf),
     "Unknown": ((90, 90, 110), question),
+    # abilities of the Mage, the Rogue and the Barbarian
+    "Fireball": ((200, 70, 30), fireball),
+    "IcePath": ((70, 150, 210), snowflake),
+    "ChainLightning": ((80, 70, 170), bolt),
+    "Dash": ((58, 120, 178), dash_lines),
+    "Backstab": ((120, 30, 40), dagger),
+    "SmokeBomb": ((80, 86, 96), cloud),
+    "Crush": ((130, 90, 50), hammer),
+    "Throw": ((176, 120, 40), throw_arc),
+    "Rage": ((170, 30, 30), rage),
 }
 
 
