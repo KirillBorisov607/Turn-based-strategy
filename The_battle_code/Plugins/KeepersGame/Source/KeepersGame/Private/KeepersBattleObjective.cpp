@@ -289,15 +289,21 @@ void AKeepersBattleObjective::SetUp()
 	{
 		const FVector Place = Tiles[BeaconIndex].Location;
 		Beacon = KeepersObjective::Shape(this, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FLinearColor(1.f, 0.78f, 0.25f));
-		Beacon->SetWorldLocation(Place + FVector(0.f, 0.f, 110.f));
-		Beacon->SetWorldScale3D(FVector(0.22f, 0.22f, 2.2f));
+		Beacon->SetWorldLocation(Place + FVector(0.f, 0.f, 200.f));
+		Beacon->SetWorldScale3D(FVector(0.3f, 0.3f, 4.f));
+		// A golden plate on the cell and a gem turning over the pillar: seen from anywhere on the field.
+		UStaticMeshComponent* Plate = KeepersObjective::Shape(this, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FLinearColor(1.f, 0.85f, 0.35f));
+		Plate->SetWorldLocation(Place + FVector(0.f, 0.f, 3.f));
+		Plate->SetWorldScale3D(FVector(1.6f, 1.6f, 0.04f));
+		BeaconGem = KeepersObjective::Shape(this, TEXT("/Engine/BasicShapes/Cube.Cube"), FLinearColor(1.f, 0.6f, 0.15f));
+		BeaconGem->SetWorldScale3D(FVector(0.45f));
 		BeaconLight = NewObject<UPointLightComponent>(this);
 		BeaconLight->SetupAttachment(RootComponent);
 		BeaconLight->RegisterComponent();
-		BeaconLight->SetWorldLocation(Place + FVector(0.f, 0.f, 160.f));
+		BeaconLight->SetWorldLocation(Place + FVector(0.f, 0.f, 260.f));
 		BeaconLight->SetLightColor(FLinearColor(1.f, 0.75f, 0.3f));
 		BeaconLight->SetIntensity(9000.f);
-		BeaconLight->SetAttenuationRadius(420.f);
+		BeaconLight->SetAttenuationRadius(700.f);
 		BeaconLight->SetCastShadows(false);
 		UE_LOG(LogKeepersObjective, Log, TEXT("Beacon at (%d,%d)"), BeaconIndex.X, BeaconIndex.Y);
 	}
@@ -332,7 +338,7 @@ void AKeepersBattleObjective::SetUp()
 		const FKeepersHeroDef* Def = KeepersHeroes::FindByUnitType(KeepersHeroes::UnitTypeOf(Leader));
 		LeaderName = Def ? Def->Name.ToString() : FString();
 		Crown = KeepersObjective::Shape(this, TEXT("/Engine/BasicShapes/Cone.Cone"), FLinearColor(1.f, 0.8f, 0.2f));
-		Crown->SetWorldScale3D(FVector(0.35f, 0.35f, -0.35f));
+		Crown->SetWorldScale3D(FVector(0.55f, 0.55f, -0.5f));
 		UE_LOG(LogKeepersObjective, Log, TEXT("Leader %s"), *Leader->GetName());
 	}
 	else
@@ -398,11 +404,16 @@ void AKeepersBattleObjective::Tick(float DeltaSeconds)
 	const float Time = GetWorld()->GetTimeSeconds();
 	if (BeaconLight)
 	{
-		BeaconLight->SetIntensity(7000.f + 3000.f * FMath::Sin(Time * 3.f));
+		BeaconLight->SetIntensity(14000.f + 6000.f * FMath::Sin(Time * 3.f));
+	}
+	if (BeaconGem && Beacon)
+	{
+		BeaconGem->SetWorldLocation(Beacon->GetComponentLocation() + FVector(0.f, 0.f, 260.f + 15.f * FMath::Sin(Time * 2.f)));
+		BeaconGem->SetWorldRotation(FRotator(45.f, Time * 80.f, 45.f));
 	}
 	if (Crown && Leader)
 	{
-		Crown->SetWorldLocation(Leader->GetActorLocation() + FVector(0.f, 0.f, 150.f + 10.f * FMath::Sin(Time * 2.5f)));
+		Crown->SetWorldLocation(Leader->GetActorLocation() + FVector(0.f, 0.f, 175.f + 10.f * FMath::Sin(Time * 2.5f)));
 		Crown->SetWorldRotation(FRotator(0.f, Time * 90.f, 0.f));
 	}
 	if (bDefeatLeader && Leader && !KeepersObjective::IsAlive(Leader))

@@ -124,6 +124,8 @@ private:
 	TObjectPtr<UPointLightComponent> BeaconLight;
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> Crown;
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> BeaconGem;
 	bool bSetUp = false;
 	FString LeaderName;
 
